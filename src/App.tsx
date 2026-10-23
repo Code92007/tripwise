@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   ArrowDownUp,
   ArrowRight,
@@ -7,6 +7,7 @@ import {
   CarFront,
   Check,
   ChevronDown,
+  ClipboardList,
   Clock3,
   Footprints,
   MapPin,
@@ -36,6 +37,7 @@ import {
   type Weights,
 } from './scoring'
 import { searchRoutes, type RouteSearch } from './routeApi'
+import { PreferenceQuiz } from './PreferenceQuiz'
 
 const storageKey = 'tripwise-v1'
 
@@ -178,6 +180,8 @@ function App() {
   const [state, setState] = useState<SavedState>(readSavedState)
   const [editing, setEditing] = useState<Route | 'new' | null>(null)
   const [showWeights, setShowWeights] = useState(false)
+  const [showQuiz, setShowQuiz] = useState(false)
+  const quizTrigger = useRef<HTMLButtonElement>(null)
   const [sort, setSort] = useState<'score' | 'time' | 'price'>('score')
   const [confirmedReset, setConfirmedReset] = useState(false)
   const [querying, setQuerying] = useState(false)
@@ -218,6 +222,17 @@ function App() {
     setState(initialState)
     setConfirmedReset(false)
     setSort('score')
+  }
+
+  function closeQuiz() {
+    setShowQuiz(false)
+    window.requestAnimationFrame(() => quizTrigger.current?.focus())
+  }
+
+  function applyQuiz(weights: Weights) {
+    setState((current) => ({ ...current, preset: 'custom', weights }))
+    setShowWeights(true)
+    closeQuiz()
   }
 
   async function queryRoutes() {
@@ -283,10 +298,11 @@ function App() {
                   </button>
                 ))}
               </div>
+              <button ref={quizTrigger} className="quiz-entry" type="button" onClick={() => setShowQuiz(true)}><ClipboardList size={17} /><span>做偏好问卷</span><ArrowRight size={16} /></button>
               <button className={`tune-toggle ${showWeights ? 'open' : ''}`} aria-expanded={showWeights} onClick={() => setShowWeights(!showWeights)}><SlidersHorizontal size={16} />微调偏好<ChevronDown size={16} /></button>
               {showWeights && <div className="weight-list">
                 {weightFields.map((field) => <label className="weight-field" key={field.key} title={field.hint}>
-                  <span className="weight-label"><span>{field.label}</span><strong>{formatNumber(state.weights[field.key])} <small>{field.unit}</small></strong></span>
+                  <span className="weight-label"><span>{field.label}</span><strong>{String(state.weights[field.key])} <small>{field.unit}</small></strong></span>
                   <input type="range" min={field.min} max={field.max} step={field.step} value={state.weights[field.key]} onChange={(event) => setState({ ...state, preset: 'custom', weights: { ...state.weights, [field.key]: Number(event.target.value) } })} />
                 </label>)}
               </div>}
@@ -338,6 +354,7 @@ function App() {
         </div>
       </main>
       {editing && <RouteEditor key={editing === 'new' ? 'new' : editing.id} route={editing === 'new' ? undefined : editing} onSave={saveRoute} onClose={() => setEditing(null)} />}
+      {showQuiz && <PreferenceQuiz onApply={applyQuiz} onClose={closeQuiz} />}
     </div>
   )
 }
