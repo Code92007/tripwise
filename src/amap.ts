@@ -1,4 +1,4 @@
-import type { Route } from './scoring'
+import type { Coordinate, Route, RouteDetails, RouteLeg } from './scoring'
 
 type Data = Record<string, unknown>
 
@@ -25,6 +25,97 @@ function text(value: unknown): string {
   return typeof value === 'string' ? value : ''
 }
 
+function coordinate(value: unknown): Coordinate | null {
+  const parts = text(value).split(',').map(Number)
+  return parts.length === 2 && parts.every(Number.isFinite) && Math.abs(parts[0]) <= 180 && Math.abs(parts[1]) <= 90
+    ? [parts[0], parts[1]] : null
+}
+
+function polyline(value: unknown): Coordinate[] {
+  const raw = typeof value === 'string' ? value : text(object(value).polyline)
+  const points = raw.split(';').map(coordinate).filter((point): point is Coordinate => point !== null)
+  if (points.length <= 300) return points
+  const stride = Math.ceil((points.length - 1) / 299)
+  return points.filter((_, index) => index % stride === 0 || index === points.length - 1)
+}
+
+function mergePaths(steps: Data[]): Coordinate[] {
+  return polyline(steps.map((step) => typeof step.polyline === 'string' ? step.polyline : text(object(step.polyline).polyline)).filter(Boolean).join(';'))
+}
+
+function routeDetails(route: Data, legs: RouteLeg[]): RouteDetails {
+  return { origin: coordinate(route.origin), destination: coordinate(route.destination), legs }
+}
+
+function meters(value: unknown): number | undefined {
+  return number(value) ?? undefined
+}
+
+function walkLeg(walking: Data, destination: string): RouteLeg | null {
+  const steps = items(walking.steps)
+  const distance = number(walking.distance)
+  if (!steps.length && (!distance || distance <= 0)) return null
+  return {
+    mode: 'walk',
+    instruction: destination ? `步行至${destination}` : '步行前往下一站',
+    minutes: minutes(object(walking.cost).duration ?? walking.duration) ?? undefined,
+    distanceMeters: distance ?? undefined,
+    path: mergePaths(steps),
+  }
+}
+
+function transitLegs(segments: Data[]): RouteLeg[] {
+  const legs: RouteLeg[] = []
+  for (const segment of segments) {
+    const busline = items(object(segment.bus).buslines)[0]
+    const rail = object(segment.railway)
+    const departure = text(object(busline?.departure_stop).name) || text(object(rail.departure_stop).name)
+    const walk = walkLeg(object(segment.walking), departure)
+    if (walk) legs.push(walk)
+    if (busline) {
+      const name = text(busline.name).split('(')[0] || '公共交通'
+      legs.push({
+        mode: 'transit', instruction: `乘坐${name}`,
+        from: text(object(busline.departure_stop).name), to: text(object(busline.arrival_stop).name),
+        minutes: minutes(object(busline.cost).duration) ?? undefined,
+        distanceMeters: meters(busline.distance), viaStops: items(busline.via_stops).length,
+        path: polyline(busline.polyline),
+      })
+    } else if (Object.keys(rail).length) {
+      legs.push({
+        mode: 'rail', instruction: `乘坐${text(rail.name) || '火车'}`,
+        from: text(object(rail.departure_stop).name), to: text(object(rail.arrival_stop).name),
+        minutes: minutes(rail.time) ?? undefined,
+        distanceMeters: meters(rail.distance),
+        path: polyline(rail.polyline),
+      })
+    }
+  }
+  return legs
+}
+
+function stepLegs(steps: Data[], mode: 'walk' | 'drive'): RouteLeg[] {
+  return steps.slice(0, 100).map((step) => ({
+    mode,
+    instruction: text(step.instruction) || (mode === 'drive' ? '继续行驶' : '继续步行'),
+    distanceMeters: meters(step.step_distance ?? step.distance),
+    path: polyline(step.polyline),
+  }))
+}
+
+function taxiEstimate(route: Data, path: Data, firstPath: Data): { price: number; range: [number, number] } | null {
+  const distance = number(path.distance)
+  const baseDistance = number(firstPath.distance)
+  const providerFare = number(route.taxi_cost)
+  if (distance === null) return null
+  const duration = minutes(object(path.cost).duration ?? path.duration) ?? 0
+  const baseline = providerFare !== null && baseDistance !== null
+    ? providerFare + (distance - baseDistance) / 1000 * 2.5
+    : 14 + Math.max(0, distance / 1000 - 3) * 2.7 + duration * 0.25
+  const price = Math.max(10, Math.round(baseline))
+  return { price, range: [Math.max(10, Math.floor(price * 0.8)), Math.ceil(price * 1.3)] }
+}
+
 export type Place = { address: string; location: string; citycode: string; adcode: string }
 
 export function parseGeocode(payload: unknown): Place | null {
@@ -46,7 +137,8 @@ function transitName(segments: Data[], index: number): string {
 }
 
 export function parseTransit(payload: unknown): Route[] {
-  return items(object(object(payload).route).transits).flatMap((transit, index) => {
+  const route = object(object(payload).route)
+  return items(route.transits).flatMap((transit, index) => {
     const duration = minutes(object(transit.cost).duration ?? transit.duration)
     if (duration === null || duration === 0) return []
     const segments = items(transit.segments)
@@ -70,34 +162,42 @@ export function parseTransit(payload: unknown): Route[] {
       stopGo: null,
       note: railway ? '高德跨城公共交通方案；铁路班次与票价请另行核实' : '高德公共交通规划；班次与票价请核实',
       source: 'amap' as const,
+      details: routeDetails(route, transitLegs(segments)),
     }]
   })
 }
 
 export function parseDriving(payload: unknown): Route[] {
   const route = object(object(payload).route)
-  return items(route.paths).slice(0, 3).flatMap((path, index) => {
+  const paths = items(route.paths)
+  return paths.slice(0, 3).flatMap((path, index) => {
     const duration = minutes(object(path.cost).duration ?? path.duration)
     if (duration === null || duration === 0) return []
+    const fare = taxiEstimate(route, path, paths[0])
+    const tolls = number(object(path.cost).tolls ?? path.tolls)
     return [{
       id: `amap-drive-${index}`,
-      name: index ? `驾车备选 ${index + 1}` : '驾车路线',
+      name: index ? `打车备选 ${index + 1}` : '打车路线',
       mode: 'drive' as const,
       minutes: duration,
-      price: null,
+      price: fare?.price ?? null,
+      estimatedFare: fare !== null,
+      fareRange: fare?.range,
       walkMinutes: null,
       transfers: 0,
       delayMinutes: null,
       stopGo: null,
       trafficLights: number(object(path.cost).traffic_lights),
-      note: `高德驾车规划；通行费 ${number(object(path.cost).tolls ?? path.tolls) === null ? '未知' : `约 ¥${number(object(path.cost).tolls ?? path.tolls)}`}，总成本待填写；用时不含取车与停车`,
+      note: `高德驾车规划；打车费用为粗估${tolls === null ? '' : `，通行费约 ¥${tolls}`}；用时不含等车与上下车`,
       source: 'amap' as const,
+      details: routeDetails(route, stepLegs(items(path.steps), 'drive')),
     }]
   })
 }
 
 export function parseWalking(payload: unknown): Route[] {
-  return items(object(object(payload).route).paths).slice(0, 1).flatMap((path) => {
+  const route = object(object(payload).route)
+  return items(route.paths).slice(0, 1).flatMap((path) => {
     const duration = minutes(object(path.cost).duration ?? path.duration)
     return duration === null || duration === 0 ? [] : [{
       id: 'amap-walk',
@@ -111,6 +211,7 @@ export function parseWalking(payload: unknown): Route[] {
       stopGo: null,
       note: '高德步行规划',
       source: 'amap' as const,
+      details: routeDetails(route, stepLegs(items(path.steps), 'walk')),
     }]
   })
 }

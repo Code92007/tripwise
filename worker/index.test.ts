@@ -28,7 +28,7 @@ it('returns normalized live routes without exposing the key', async () => {
     let payload: object
     if (url.pathname.includes('geocode')) payload = { status: '1', geocodes: [{ formatted_address: url.searchParams.get('address'), location: '121.1,31.1', citycode: '021', adcode: '310000' }] }
     else if (url.pathname.includes('transit')) payload = { status: '1', route: { transits: [{ cost: { duration: '2400', transit_fee: '5' }, segments: [{ walking: { cost: { duration: '600' } }, bus: { buslines: [{ name: '地铁2号线' }] } }] }] } }
-    else if (url.pathname.includes('driving')) payload = { status: '1', route: { paths: [{ cost: { duration: '1800', traffic_lights: '12' } }] } }
+    else if (url.pathname.includes('driving')) payload = { status: '1', route: { taxi_cost: '38', paths: [{ distance: '10000', cost: { duration: '1800', traffic_lights: '12' }, steps: [{ instruction: '直行', polyline: '121.1,31.1;121.2,31.2' }] }] } }
     else payload = { status: '1', route: { paths: [{ cost: { duration: '3600' } }] } }
     return new Response(JSON.stringify(payload))
   }) as typeof fetch
@@ -36,10 +36,12 @@ it('returns normalized live routes without exposing the key', async () => {
     method: 'POST', headers: { Origin: 'https://code92007.github.io', 'Content-Type': 'application/json' },
     body: JSON.stringify({ origin: '上海虹桥站', destination: '人民广场' }),
   }), env, fetcher)
-  const result = await response.json() as { routes: { mode: string; price: number | null }[] }
+  const result = await response.json() as { routes: { mode: string; price: number | null; details?: { legs: unknown[] } }[] }
   expect(response.status).toBe(200)
   expect(response.headers.get('Access-Control-Allow-Origin')).toBe('https://code92007.github.io')
   expect(result.routes).toHaveLength(3)
-  expect(result.routes.find((route) => route.mode === 'drive')?.price).toBeNull()
+  expect(result.routes.find((route) => route.mode === 'drive')?.price).toBe(38)
+  expect(result.routes.find((route) => route.mode === 'drive')?.details?.legs).toHaveLength(1)
+  expect(fetcher.mock.calls.filter(([url]) => !url.includes('geocode')).every(([url]) => new URL(url).searchParams.get('show_fields') === 'cost,polyline')).toBe(true)
   expect(JSON.stringify(result)).not.toContain('test-secret')
 })

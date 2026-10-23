@@ -122,6 +122,10 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 3px s
 .score-line > strong { min-width: 101px; text-align: right; color: #285e4c; font-size: 13px; white-space: nowrap; }
 .score-line small { color: #8ca098; font-size: 10px; font-weight: 500; }
 .route-foot { margin: 12px 0 0 26px; color: #9aa8a2; font-size: 10px; }
+.route-detail-trigger { display: inline-flex; align-items: center; gap: 7px; min-height: 34px; margin: 11px 0 0 26px; padding: 0; border: 0; background: transparent; color: #13755d; font-size: 11px; font-weight: 700; }
+.route-detail-trigger:hover { color: #0a5d49; text-decoration: underline; }
+.route-detail-trigger svg:last-child { margin-left: 2px; }
+.route-refresh-note { margin: 11px 0 0 26px; color: #84948d; font-size: 10px; }
 .method-note { margin: 16px 0 0; color: #96a29d; font-size: 10px; line-height: 1.6; }
 .empty-state { min-height: 280px; display: flex; flex-direction: column; align-items: center; justify-content: center; border: 1px dashed #c9d8d0; border-radius: 6px; background: #fff; color: #82978b; text-align: center; }
 .empty-state h3 { margin: 14px 0 2px; color: #2d4339; font-size: 16px; }
@@ -129,6 +133,32 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 3px s
 
 .modal-backdrop { position: fixed; z-index: 10; inset: 0; display: grid; place-items: center; padding: 18px; background: rgba(13, 30, 27, .56); }
 .editor { width: min(100%, 520px); max-height: min(92vh, 850px); overflow: auto; padding: 23px; border-radius: 6px; background: #fff; box-shadow: 0 24px 80px rgba(4, 28, 18, .2); }
+.route-dialog { width: min(100%, 860px); max-height: min(94dvh, 920px); overflow: auto; border-radius: 6px; background: #fff; box-shadow: 0 24px 80px rgba(4, 28, 18, .2); }
+.route-dialog-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; padding: 22px 25px 15px; }
+.route-dialog-head .eyebrow { margin-bottom: 5px; }
+.route-dialog-head h2 { margin: 0; font-size: 20px; line-height: 1.35; overflow-wrap: anywhere; }
+.route-dialog-head h2:focus { outline: none; }
+.route-dialog-summary { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 22px; padding: 0 25px 17px; color: #536b61; font-size: 12px; font-weight: 700; }
+.route-dialog-summary span { display: inline-flex; align-items: center; gap: 6px; }
+.route-dialog-summary svg { color: #16866e; }
+.route-map { width: 100%; height: 310px; background: #e9efeb; z-index: 0; }
+.route-dialog-content { padding: 20px 25px 0; }
+.route-dialog-content h3 { margin: 0 0 13px; font-size: 14px; }
+.detail-leg-list { margin: 0; padding: 0; list-style: none; }
+.detail-leg { display: grid; grid-template-columns: 27px minmax(0, 1fr); gap: 12px; position: relative; padding: 0 0 19px; }
+.detail-leg:not(:last-child)::before { position: absolute; top: 26px; bottom: 0; left: 12px; width: 1px; background: #dbe6df; content: ''; }
+.detail-leg-index { z-index: 1; display: grid; place-items: center; width: 25px; height: 25px; border-radius: 50%; background: #e9f4ef; color: #13755d; font-size: 10px; font-weight: 800; }
+.detail-walk .detail-leg-index { background: #fff1e2; color: #af641f; }
+.detail-drive .detail-leg-index { background: #e8f1f8; color: #1878b6; }
+.detail-rail .detail-leg-index { background: #eeeeff; color: #5557a9; }
+.detail-leg-body { min-width: 0; padding-top: 1px; }
+.detail-leg-mode { display: block; margin-bottom: 2px; color: #6d867a; font-size: 10px; font-weight: 700; }
+.detail-leg-body strong { display: block; color: #263b31; font-size: 12px; line-height: 1.5; overflow-wrap: anywhere; }
+.detail-leg-body p { margin: 3px 0 0; color: #50675c; font-size: 11px; }
+.detail-leg-body small { display: block; margin-top: 4px; color: #879a8f; font-size: 10px; }
+.detail-empty { color: #809188; font-size: 12px; }
+.route-dialog-note { display: flex; align-items: flex-start; gap: 6px; margin: 0; padding: 3px 25px 21px; color: #86988d; font-size: 10px; line-height: 1.6; }
+.route-dialog-note svg { flex: none; margin-top: 1px; }
 .editor-head { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 21px; }
 .editor-head .eyebrow { margin-bottom: 4px; }
 .editor-head h2 { margin: 0; font-size: 19px; }
@@ -195,7 +225,13 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 3px s
   .route-card { padding: 16px 13px 14px; }
   .route-top { gap: 9px; }
   .route-metrics { margin: 17px 0 16px; grid-template-columns: repeat(2, minmax(0, 1fr)); row-gap: 12px; }
-  .score-line, .route-foot { margin-left: 0; }
+  .score-line, .route-foot, .route-detail-trigger, .route-refresh-note { margin-left: 0; }
   .score-line > strong { min-width: 94px; }
   .quiz-dialog { padding: 18px; }
+  .route-dialog-head { padding: 17px 17px 13px; }
+  .route-dialog-head h2 { font-size: 17px; }
+  .route-dialog-summary { padding: 0 17px 13px; gap: 8px 13px; font-size: 11px; }
+  .route-map { height: 240px; }
+  .route-dialog-content { padding: 18px 17px 0; }
+  .route-dialog-note { padding: 3px 17px 18px; }
 }

@@ -10,6 +10,7 @@ import {
   ClipboardList,
   Clock3,
   Footprints,
+  Map,
   MapPin,
   Pencil,
   Plane,
@@ -38,6 +39,7 @@ import {
 } from './scoring'
 import { searchRoutes, type RouteSearch } from './routeApi'
 import { PreferenceQuiz } from './PreferenceQuiz'
+import { RouteDetails } from './RouteDetails'
 
 const storageKey = 'tripwise-v1'
 
@@ -134,7 +136,7 @@ function RouteEditor({ route, onSave, onClose }: { route?: Route; onSave: (route
     if (!draft.name.trim()) return setError('请填写方案名称。')
     if (draft.minutes <= 0 || (draft.walkMinutes !== null && draft.walkMinutes > draft.minutes)) return setError('总用时需大于 0，步行时间不能超过总用时。')
     if (Object.values(draft).some((value) => typeof value === 'number' && (!Number.isFinite(value) || value < 0))) return setError('数值不能为负数。')
-    onSave({ ...draft, name: draft.name.trim(), note: draft.note.trim(), source: 'manual', id: route?.id || crypto.randomUUID() })
+    onSave({ ...draft, name: draft.name.trim(), note: draft.note.trim(), source: 'manual', id: route?.id || crypto.randomUUID(), details: undefined, estimatedFare: undefined, fareRange: undefined })
   }
 
   return (
@@ -179,6 +181,7 @@ function RouteEditor({ route, onSave, onClose }: { route?: Route; onSave: (route
 function App() {
   const [state, setState] = useState<SavedState>(readSavedState)
   const [editing, setEditing] = useState<Route | 'new' | null>(null)
+  const [viewing, setViewing] = useState<Route | null>(null)
   const [showWeights, setShowWeights] = useState(false)
   const [showQuiz, setShowQuiz] = useState(false)
   const quizTrigger = useRef<HTMLButtonElement>(null)
@@ -335,25 +338,27 @@ function App() {
                 return <article className={`route-card ${isBest ? 'best' : ''}`} key={route.id}>
                   <div className="route-top">
                     <span className="route-rank">{String(index + 1).padStart(2, '0')}</span>
-                    <div className="route-identity"><span className="mode-pill"><ModeIcon mode={route.mode} />{modeNames[route.mode]} · {route.source === 'amap' ? '高德' : route.id.startsWith('sample-') ? '示例' : '手动'}</span><h3>{route.name}</h3>{route.note && <p>{route.note}</p>}</div>
+                    <div className="route-identity"><span className="mode-pill"><ModeIcon mode={route.mode} />{route.mode === 'drive' && route.source === 'amap' ? '打车' : modeNames[route.mode]} · {route.source === 'amap' ? '高德' : route.id.startsWith('sample-') ? '示例' : '手动'}</span><h3>{route.name}</h3>{route.note && <p>{route.note}</p>}</div>
                     <div className="card-actions"><button className="icon-button" title="编辑方案" aria-label={`编辑${route.name}`} onClick={() => setEditing(route)}><Pencil size={17} /></button><button className="icon-button danger" title="删除方案" aria-label={`删除${route.name}`} onClick={() => setState({ ...state, routes: state.routes.filter((item) => item.id !== route.id) })}><Trash2 size={17} /></button></div>
                   </div>
                   <div className="route-metrics">
                     <div><Clock3 size={17} /><strong>{formatNumber(route.minutes)} 分钟</strong><small>{route.source === 'amap' && route.mode === 'drive' ? '驾车段用时' : '规划用时'}</small></div>
-                    <div><Wallet size={17} /><strong>{route.price === null ? '待核实' : `¥${formatNumber(route.price)}`}</strong><small>预计费用</small></div>
+                    <div><Wallet size={17} /><strong>{route.price === null ? '待核实' : `${route.estimatedFare ? '约 ' : ''}¥${formatNumber(route.price)}`}</strong><small>{route.estimatedFare ? '打车粗估' : '预计费用'}</small></div>
                     <div><Footprints size={17} /><strong>{route.walkMinutes === null ? '未知' : `${formatNumber(route.walkMinutes)} 分钟`}</strong><small>步行</small></div>
                     <div><ArrowRight size={17} /><strong>{formatNumber(route.transfers)} 次</strong><small>换乘</small></div>
                   </div>
                   <div className="score-line"><div className="score-bar"><span style={{ width: `${barWidth}%` }} /></div><strong>{score === null ? '待补费用' : formatNumber(score)} <small>{score === null ? '暂不排序' : '等效分钟'}</small></strong></div>
+                  {route.source === 'amap' && (route.details ? <button className="route-detail-trigger" type="button" onClick={() => setViewing(route)}><Map size={15} />查看路线与地图<ArrowRight size={14} /></button> : <p className="route-refresh-note">重新查询后可查看分段行程与地图。</p>)}
                   {((route.delayMinutes ?? 0) > 0 || (route.stopGo ?? 0) > 0 || route.trafficLights != null) && <div className="route-foot">{(route.delayMinutes ?? 0) > 0 && `预计波动 ${formatNumber(route.delayMinutes!)} 分钟`}{(route.stopGo ?? 0) > 0 && ` · 停走强度 ${formatNumber(route.stopGo!)}/5`}{route.trafficLights != null && ` · 红绿灯 ${formatNumber(route.trafficLights)} 个`}</div>}
                 </article>
               })}
             </div>
-            <p className="method-note">等效分钟 = 规划用时 + 费用、步行、换乘、延误与停走负担的个性化折算。未知费用的路线暂不参与推荐；未知延误与停走负担未计入，请结合实际判断。</p>
+            <p className="method-note">等效分钟 = 规划用时 + 费用、步行、换乘、延误与停走负担的个性化折算。打车费用为参考估价，实际价格和等车时间可能变化；未知费用的路线暂不参与推荐。</p>
           </section>
         </div>
       </main>
       {editing && <RouteEditor key={editing === 'new' ? 'new' : editing.id} route={editing === 'new' ? undefined : editing} onSave={saveRoute} onClose={() => setEditing(null)} />}
+      {viewing && <RouteDetails route={viewing} onClose={() => setViewing(null)} />}
       {showQuiz && <PreferenceQuiz onApply={applyQuiz} onClose={closeQuiz} />}
     </div>
   )

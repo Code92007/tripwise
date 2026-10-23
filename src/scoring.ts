@@ -1,5 +1,24 @@
 export type TravelMode = 'transit' | 'rail' | 'flight' | 'drive' | 'walk' | 'mixed'
 
+export type Coordinate = [number, number]
+
+export type RouteLeg = {
+  mode: 'walk' | 'transit' | 'rail' | 'drive'
+  instruction: string
+  from?: string
+  to?: string
+  minutes?: number
+  distanceMeters?: number
+  viaStops?: number
+  path: Coordinate[]
+}
+
+export type RouteDetails = {
+  origin: Coordinate | null
+  destination: Coordinate | null
+  legs: RouteLeg[]
+}
+
 export type Route = {
   id: string
   name: string
@@ -13,6 +32,9 @@ export type Route = {
   note: string
   source?: 'sample' | 'manual' | 'amap'
   trafficLights?: number | null
+  estimatedFare?: boolean
+  fareRange?: [number, number]
+  details?: RouteDetails
 }
 
 export type Weights = {
@@ -119,8 +141,27 @@ export function isRoute(value: unknown): value is Route {
     ['minutes', 'transfers'].every((key) => validNonnegative(route[key])) &&
     ['price', 'walkMinutes', 'delayMinutes', 'stopGo'].every((key) => route[key] === null || validNonnegative(route[key])) &&
     (route.source === undefined || ['sample', 'manual', 'amap'].includes(String(route.source))) &&
+    (route.details === undefined || isRouteDetails(route.details)) &&
     typeof route.note === 'string'
   )
+}
+
+function isCoordinate(value: unknown): value is Coordinate {
+  return Array.isArray(value) && value.length === 2 && value.every((part) => typeof part === 'number' && Number.isFinite(part))
+}
+
+function isRouteDetails(value: unknown): value is RouteDetails {
+  if (!value || typeof value !== 'object') return false
+  const details = value as Record<string, unknown>
+  return (details.origin === null || isCoordinate(details.origin)) &&
+    (details.destination === null || isCoordinate(details.destination)) &&
+    Array.isArray(details.legs) && details.legs.length <= 100 && details.legs.every((item: unknown) => {
+      if (!item || typeof item !== 'object') return false
+      const leg = item as Record<string, unknown>
+      return ['walk', 'transit', 'rail', 'drive'].includes(String(leg.mode)) &&
+        typeof leg.instruction === 'string' && Array.isArray(leg.path) &&
+        leg.path.length <= 300 && leg.path.every(isCoordinate)
+    })
 }
 
 function validNonnegative(value: unknown): boolean {
