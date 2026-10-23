@@ -1,0 +1,13 @@
+tuheng.wannafly.cn {
+    encode zstd gzip
+    reverse_proxy 127.0.0.1:8093
+    header {
+        X-Content-Type-Options nosniff
+        Referrer-Policy strict-origin-when-cross-origin
+        Permissions-Policy "geolocation=(), microphone=(), camera=()"
+    }
+}
+
+http://tuheng.wannafly.cn {
+    redir https://tuheng.wannafly.cn{uri} permanent
+}

@@ -19,6 +19,8 @@ Key 只放在 Cloudflare Worker 的 Secret 中，不能写入 `VITE_` 变量、G
 
 ### 启用步骤
 
+以下为 Cloudflare Worker 部署方式；自有服务器部署方式见文末。
+
 1. 在[高德控制台](https://console.amap.com/dev/key/app)注册并完成个人认证，新建应用，申请 **Web 服务** Key。
 2. 注册 Cloudflare 账号。在 macOS 终端进入本仓库，运行 `pnpm exec wrangler login` 和 `pnpm exec wrangler secret put AMAP_WEB_KEY`，按提示输入 Key，再运行 `pnpm exec wrangler deploy`。Worker 配置位于 `wrangler.jsonc`。部署地址通常是 `https://tripwise-routes.<账号子域>.workers.dev`。
 3. 在 GitHub 仓库 **Settings → Secrets and variables → Actions → Variables** 新增 `API_BASE_URL`，值为上述 Worker 的根地址（不加 `/api/routes`）。重新运行 **Web and Pages** 与 **Android debug APK** 工作流。此地址是公开的，Key 不在其中。
@@ -45,3 +47,15 @@ cd android && ./gradlew assembleDebug
 ## 航班数据
 
 去哪儿[开放平台说明](https://open.qunar.com/data/detail/open)要求注册并签署电子协议后申请机票 API；不能把网页票价抓取当作免费公开接口。携程、去哪儿的人工核价入口已加到页面。获得正式合作接口及授权后，才能接入实时票价与库存，并规划“高铁到邻近机场 + 航班”等全国组合路线。
+
+## 自有服务器部署
+
+`server/index.ts` 是 Node 22 的生产入口，同时提供 `dist/` 网页和 `/api/routes`。默认只监听 `127.0.0.1:8093`；`deploy/tuheng.caddy` 把 `tuheng.wannafly.cn` 反向代理到该端口，`deploy/tuheng.service` 管理进程。部署目录为 `/root/tripwise`，服务进程使用 `www-data` 用户。
+
+```bash
+pnpm install --frozen-lockfile
+VITE_API_BASE_URL=https://tuheng.wannafly.cn pnpm build
+pnpm build:server
+```
+
+服务器上的 `/root/tripwise/.env` 可设置 `AMAP_WEB_KEY=...`，文件应为仅 root 可读的 `0600` 权限，重启 `tuheng.service` 后生效。该文件被 `.gitignore` 忽略，不要提交密钥。没有 Key 时，网页仍可比较手动方案，`/health` 会返回 `configured:false`，路线接口返回明确的 503 提示。

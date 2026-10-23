@@ -1,0 +1,23 @@
+[Unit]
+Description=Tripwise web and route API
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=www-data
+Group=www-data
+WorkingDirectory=/root/tripwise
+Environment=NODE_ENV=production
+Environment=PORT=8093
+Environment=HOST=127.0.0.1
+EnvironmentFile=-/root/tripwise/.env
+ExecStart=/root/.nvm/versions/node/v22.22.2/bin/node /root/tripwise/server-dist/index.js
+Restart=on-failure
+RestartSec=3
+NoNewPrivileges=true
+ProtectSystem=full
+ProtectHome=read-only
+
+[Install]
+WantedBy=multi-user.target
