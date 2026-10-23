@@ -5,12 +5,14 @@ export type Route = {
   name: string
   mode: TravelMode
   minutes: number
-  price: number
-  walkMinutes: number
+  price: number | null
+  walkMinutes: number | null
   transfers: number
-  delayMinutes: number
-  stopGo: number
+  delayMinutes: number | null
+  stopGo: number | null
   note: string
+  source?: 'sample' | 'manual' | 'amap'
+  trafficLights?: number | null
 }
 
 export type Weights = {
@@ -68,19 +70,26 @@ export const sampleRoutes: Route[] = [
   },
 ]
 
-export function scoreRoute(route: Route, weights: Weights): number {
+export function scoreRoute(route: Route, weights: Weights): number | null {
+  if (route.price === null) return null
   return (
     route.minutes +
     route.price * weights.price +
-    route.walkMinutes * weights.walking +
+    (route.walkMinutes ?? 0) * weights.walking +
     route.transfers * weights.transfer +
-    route.delayMinutes * weights.delay +
-    route.stopGo * weights.stopGo
+    (route.delayMinutes ?? 0) * weights.delay +
+    (route.stopGo ?? 0) * weights.stopGo
   )
 }
 
 export function rankRoutes(routes: Route[], weights: Weights): Route[] {
-  return [...routes].sort((a, b) => scoreRoute(a, weights) - scoreRoute(b, weights) || a.minutes - b.minutes)
+  return [...routes].sort((a, b) => {
+    const aScore = scoreRoute(a, weights)
+    const bScore = scoreRoute(b, weights)
+    if (aScore === null) return bScore === null ? a.minutes - b.minutes : 1
+    if (bScore === null) return -1
+    return aScore - bScore || a.minutes - b.minutes
+  })
 }
 
 export function compareWithFastest(best: Route, routes: Route[]): string {
@@ -88,10 +97,10 @@ export function compareWithFastest(best: Route, routes: Route[]): string {
   if (!fastest || best.id === fastest.id) return '在当前偏好下，这也是用时最短的方案。'
 
   const differences: string[] = []
-  if (fastest.price > best.price) differences.push(`省 ¥${formatNumber(fastest.price - best.price)}`)
+  if (fastest.price !== null && best.price !== null && fastest.price > best.price) differences.push(`省 ¥${formatNumber(fastest.price - best.price)}`)
   if (fastest.transfers > best.transfers) differences.push(`少换乘 ${fastest.transfers - best.transfers} 次`)
-  if (fastest.delayMinutes > best.delayMinutes) differences.push('延误风险更低')
-  if (fastest.stopGo > best.stopGo) differences.push('停走负担更小')
+  if (fastest.delayMinutes !== null && best.delayMinutes !== null && fastest.delayMinutes > best.delayMinutes) differences.push('延误风险更低')
+  if (fastest.stopGo !== null && best.stopGo !== null && fastest.stopGo > best.stopGo) differences.push('停走负担更小')
   const slower = best.minutes - fastest.minutes
   return `${slower > 0 ? `比最快方案多 ${formatNumber(slower)} 分钟` : '与最快方案用时相同'}${differences.length ? `，但${differences.join('、')}` : ''}。`
 }
@@ -107,9 +116,13 @@ export function isRoute(value: unknown): value is Route {
     typeof route.id === 'string' &&
     typeof route.name === 'string' &&
     ['transit', 'rail', 'flight', 'drive', 'walk', 'mixed'].includes(String(route.mode)) &&
-    ['minutes', 'price', 'walkMinutes', 'transfers', 'delayMinutes', 'stopGo'].every(
-      (key) => typeof route[key] === 'number' && Number.isFinite(route[key]) && (route[key] as number) >= 0,
-    ) &&
+    ['minutes', 'transfers'].every((key) => validNonnegative(route[key])) &&
+    ['price', 'walkMinutes', 'delayMinutes', 'stopGo'].every((key) => route[key] === null || validNonnegative(route[key])) &&
+    (route.source === undefined || ['sample', 'manual', 'amap'].includes(String(route.source))) &&
     typeof route.note === 'string'
   )
+}
+
+function validNonnegative(value: unknown): boolean {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0
 }

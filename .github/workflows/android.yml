@@ -27,6 +27,8 @@ jobs:
           packages: 'platform-tools platforms;android-36 build-tools;36.0.0'
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
+        env:
+          VITE_API_BASE_URL: ${{ vars.API_BASE_URL }}
       - run: pnpm exec cap sync android
       - run: ./gradlew assembleDebug
         working-directory: android

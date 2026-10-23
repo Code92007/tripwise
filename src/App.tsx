@@ -15,6 +15,7 @@ import {
   Plus,
   RotateCcw,
   Route as RouteIcon,
+  Search,
   SlidersHorizontal,
   TrainFront,
   Trash2,
@@ -34,6 +35,7 @@ import {
   type TravelMode,
   type Weights,
 } from './scoring'
+import { searchRoutes, type RouteSearch } from './routeApi'
 
 const storageKey = 'tripwise-v1'
 
@@ -43,6 +45,7 @@ type SavedState = {
   routes: Route[]
   preset: Preset
   weights: Weights
+  lastQuery?: Omit<RouteSearch, 'routes'>
 }
 
 const initialState: SavedState = {
@@ -68,6 +71,7 @@ function readSavedState(): SavedState {
       routes: saved.routes,
       preset,
       weights: validWeights ? weights : presets.comfort,
+      lastQuery: saved.lastQuery && typeof saved.lastQuery.fetchedAt === 'string' && Array.isArray(saved.lastQuery.warnings) ? saved.lastQuery : undefined,
     }
   } catch {
     return initialState
@@ -116,7 +120,7 @@ const weightFields: { key: keyof Weights; label: string; hint: string; min: numb
 ]
 
 function RouteEditor({ route, onSave, onClose }: { route?: Route; onSave: (route: Route) => void; onClose: () => void }) {
-  const [draft, setDraft] = useState<RouteDraft>(route ? { ...route } : blankDraft)
+  const [draft, setDraft] = useState<RouteDraft>(route ? { ...route, source: 'manual' } : blankDraft)
   const [error, setError] = useState('')
 
   function setNumber(key: keyof RouteDraft, raw: string) {
@@ -126,9 +130,9 @@ function RouteEditor({ route, onSave, onClose }: { route?: Route; onSave: (route
   function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
     if (!draft.name.trim()) return setError('请填写方案名称。')
-    if (draft.minutes <= 0 || draft.walkMinutes > draft.minutes) return setError('总用时需大于 0，步行时间不能超过总用时。')
+    if (draft.minutes <= 0 || (draft.walkMinutes !== null && draft.walkMinutes > draft.minutes)) return setError('总用时需大于 0，步行时间不能超过总用时。')
     if (Object.values(draft).some((value) => typeof value === 'number' && (!Number.isFinite(value) || value < 0))) return setError('数值不能为负数。')
-    onSave({ ...draft, name: draft.name.trim(), note: draft.note.trim(), id: route?.id || crypto.randomUUID() })
+    onSave({ ...draft, name: draft.name.trim(), note: draft.note.trim(), source: 'manual', id: route?.id || crypto.randomUUID() })
   }
 
   return (
@@ -152,11 +156,11 @@ function RouteEditor({ route, onSave, onClose }: { route?: Route; onSave: (route
               </select>
             </label>
             <label className="field">总用时 · 分钟<input type="number" min="1" step="1" value={draft.minutes} onChange={(event) => setNumber('minutes', event.target.value)} /></label>
-            <label className="field">费用 · 元<input type="number" min="0" step="0.1" value={draft.price} onChange={(event) => setNumber('price', event.target.value)} /></label>
-            <label className="field">步行 · 分钟<input type="number" min="0" step="1" value={draft.walkMinutes} onChange={(event) => setNumber('walkMinutes', event.target.value)} /></label>
+            <label className="field">费用 · 元<input type="number" min="0" step="0.1" value={draft.price ?? ''} placeholder="待核实" onChange={(event) => setDraft({ ...draft, price: event.target.value === '' ? null : Number(event.target.value) })} /></label>
+            <label className="field">步行 · 分钟<input type="number" min="0" step="1" value={draft.walkMinutes ?? ''} placeholder="未知" onChange={(event) => setDraft({ ...draft, walkMinutes: event.target.value === '' ? null : Number(event.target.value) })} /></label>
             <label className="field">换乘 · 次<input type="number" min="0" step="1" value={draft.transfers} onChange={(event) => setNumber('transfers', event.target.value)} /></label>
-            <label className="field">可能延误 · 分钟<input type="number" min="0" step="1" value={draft.delayMinutes} onChange={(event) => setNumber('delayMinutes', event.target.value)} /></label>
-            <label className="field">停走强度 · 0–5<input type="number" min="0" max="5" step="1" value={draft.stopGo} onChange={(event) => setNumber('stopGo', event.target.value)} /></label>
+            <label className="field">可能延误 · 分钟<input type="number" min="0" step="1" value={draft.delayMinutes ?? ''} placeholder="未知" onChange={(event) => setDraft({ ...draft, delayMinutes: event.target.value === '' ? null : Number(event.target.value) })} /></label>
+            <label className="field">停走强度 · 0–5<input type="number" min="0" max="5" step="1" value={draft.stopGo ?? ''} placeholder="未知" onChange={(event) => setDraft({ ...draft, stopGo: event.target.value === '' ? null : Number(event.target.value) })} /></label>
             <label className="field field-wide">备注<input value={draft.note} maxLength={100} placeholder="这条路线有什么特点" onChange={(event) => setDraft({ ...draft, note: event.target.value })} /></label>
           </div>
           {error && <p className="form-error" role="alert">{error}</p>}
@@ -176,6 +180,8 @@ function App() {
   const [showWeights, setShowWeights] = useState(false)
   const [sort, setSort] = useState<'score' | 'time' | 'price'>('score')
   const [confirmedReset, setConfirmedReset] = useState(false)
+  const [querying, setQuerying] = useState(false)
+  const [queryError, setQueryError] = useState('')
 
   useEffect(() => {
     localStorage.setItem(storageKey, JSON.stringify(state))
@@ -184,12 +190,13 @@ function App() {
   const ranked = useMemo(() => rankRoutes(state.routes, state.weights), [state.routes, state.weights])
   const displayed = useMemo(() => {
     if (sort === 'time') return [...state.routes].sort((a, b) => a.minutes - b.minutes)
-    if (sort === 'price') return [...state.routes].sort((a, b) => a.price - b.price || a.minutes - b.minutes)
+    if (sort === 'price') return [...state.routes].sort((a, b) => (a.price ?? Infinity) - (b.price ?? Infinity) || a.minutes - b.minutes)
     return ranked
   }, [ranked, sort, state.routes])
-  const best = ranked[0]
-  const minScore = best ? scoreRoute(best, state.weights) : 0
-  const maxScore = ranked.length ? Math.max(...ranked.map((route) => scoreRoute(route, state.weights))) : 0
+  const best = ranked.find((route) => scoreRoute(route, state.weights) !== null)
+  const scores = ranked.map((route) => scoreRoute(route, state.weights)).filter((score): score is number => score !== null)
+  const minScore = scores.length ? Math.min(...scores) : 0
+  const maxScore = scores.length ? Math.max(...scores) : 0
   const hasSamples = state.routes.some((route) => route.id.startsWith('sample-'))
 
   function saveRoute(route: Route) {
@@ -213,12 +220,28 @@ function App() {
     setSort('score')
   }
 
+  async function queryRoutes() {
+    if (!state.origin.trim() || !state.destination.trim()) return setQueryError('请先填写出发地和目的地。')
+    setQueryError('')
+    setQuerying(true)
+    try {
+      const result = await searchRoutes(state.origin.trim(), state.destination.trim())
+      const { routes, ...lastQuery } = result
+      setState((current) => ({ ...current, routes: [...current.routes.filter((route) => route.source === 'manual' || (!route.source && !route.id.startsWith('sample-'))), ...routes], lastQuery }))
+      setSort('score')
+    } catch (error) {
+      setQueryError(error instanceof Error ? error.message : '路线查询失败')
+    } finally {
+      setQuerying(false)
+    }
+  }
+
   return (
     <div className="app-shell">
       <header className="topbar">
         <div className="topbar-inner">
           <div className="brand"><span className="brand-mark"><RouteIcon size={21} strokeWidth={2.2} /></span><span>途衡</span><small>TRIPWISE</small></div>
-          <span className="topbar-status"><span className="status-dot" />本地方案比较</span>
+          <span className="topbar-status"><span className="status-dot" />路线方案比较</span>
         </div>
       </header>
 
@@ -240,7 +263,10 @@ function App() {
                 <div className="place-connector" />
                 <label className="place-field"><span className="place-icon destination"><MapPin size={16} /></span><span className="sr-only">目的地</span><input value={state.destination} placeholder="输入目的地" onChange={(event) => setState({ ...state, destination: event.target.value })} /></label>
               </div>
-              <p className="field-note">地点仅作行程标记；候选方案数据由你录入。</p>
+              <button className="button button-primary query-button" onClick={queryRoutes} disabled={querying}><Search size={16} />{querying ? '查询中…' : '查询路线'}</button>
+              {queryError && <p className="form-error" role="alert">{queryError}</p>}
+              <p className="field-note">{import.meta.env.VITE_API_BASE_URL ? '查询高德公交、驾车与步行候选方案。' : '尚未配置路线服务；你仍可手动比较方案。'}</p>
+              <div className="flight-check"><span>跨城机票核价</span><a href="https://flights.ctrip.com/" target="_blank" rel="noopener noreferrer">携程</a><a href="https://flight.qunar.com/" target="_blank" rel="noopener noreferrer">去哪儿</a></div>
             </section>
 
             <section className="control-section">
@@ -265,7 +291,7 @@ function App() {
                 </label>)}
               </div>}
             </section>
-            <p className="privacy-note"><BadgeHelp size={15} />方案与偏好保存在当前设备浏览器中。</p>
+            <p className="privacy-note"><BadgeHelp size={15} />方案与偏好保存在当前设备；查询时起终点会发送至高德地图。</p>
           </aside>
 
           <section className="results" aria-labelledby="results-title">
@@ -275,10 +301,11 @@ function App() {
             </div>
 
             {hasSamples && <div className="sample-banner"><span className="sample-badge">示例数据</span><span>以下方案用于演示比较方法，时间与价格不是实时路线查询结果。</span></div>}
+            {state.lastQuery && <div className="data-banner">{state.lastQuery.provider} · 查询于 {new Date(state.lastQuery.fetchedAt).toLocaleString('zh-CN')}{state.lastQuery.warnings.length > 0 && ` · ${state.lastQuery.warnings.join('、')}`}</div>}
 
             {best && <div className="recommendation">
               <div className="recommendation-main"><span className="recommendation-kicker"><Check size={14} />当前偏好首选</span><h3>{best.name}</h3><p>{compareWithFastest(best, state.routes)}</p></div>
-              <div className="recommendation-score"><strong>{formatNumber(scoreRoute(best, state.weights))}</strong><span>等效分钟</span></div>
+              <div className="recommendation-score"><strong>{formatNumber(scoreRoute(best, state.weights)!)}</strong><span>等效分钟</span></div>
             </div>}
 
             <div className="list-toolbar"><span>{state.origin || state.destination ? `${state.origin || '出发地'}  →  ${state.destination || '目的地'}` : '候选方案'}</span><label><ArrowDownUp size={15} /><span className="sr-only">排序方式</span><select value={sort} onChange={(event) => setSort(event.target.value as typeof sort)}><option value="score">按综合适合度</option><option value="time">按用时</option><option value="price">按费用</option></select></label></div>
@@ -288,25 +315,25 @@ function App() {
               {displayed.map((route, index) => {
                 const score = scoreRoute(route, state.weights)
                 const isBest = best?.id === route.id
-                const barWidth = maxScore === minScore ? 100 : 35 + 65 * (maxScore - score) / (maxScore - minScore)
+                const barWidth = score === null ? 0 : maxScore === minScore ? 100 : 35 + 65 * (maxScore - score) / (maxScore - minScore)
                 return <article className={`route-card ${isBest ? 'best' : ''}`} key={route.id}>
                   <div className="route-top">
                     <span className="route-rank">{String(index + 1).padStart(2, '0')}</span>
-                    <div className="route-identity"><span className="mode-pill"><ModeIcon mode={route.mode} />{modeNames[route.mode]}</span><h3>{route.name}</h3>{route.note && <p>{route.note}</p>}</div>
+                    <div className="route-identity"><span className="mode-pill"><ModeIcon mode={route.mode} />{modeNames[route.mode]} · {route.source === 'amap' ? '高德' : route.id.startsWith('sample-') ? '示例' : '手动'}</span><h3>{route.name}</h3>{route.note && <p>{route.note}</p>}</div>
                     <div className="card-actions"><button className="icon-button" title="编辑方案" aria-label={`编辑${route.name}`} onClick={() => setEditing(route)}><Pencil size={17} /></button><button className="icon-button danger" title="删除方案" aria-label={`删除${route.name}`} onClick={() => setState({ ...state, routes: state.routes.filter((item) => item.id !== route.id) })}><Trash2 size={17} /></button></div>
                   </div>
                   <div className="route-metrics">
-                    <div><Clock3 size={17} /><strong>{formatNumber(route.minutes)} 分钟</strong><small>门到门</small></div>
-                    <div><Wallet size={17} /><strong>¥{formatNumber(route.price)}</strong><small>预计费用</small></div>
-                    <div><Footprints size={17} /><strong>{formatNumber(route.walkMinutes)} 分钟</strong><small>步行</small></div>
+                    <div><Clock3 size={17} /><strong>{formatNumber(route.minutes)} 分钟</strong><small>{route.source === 'amap' && route.mode === 'drive' ? '驾车段用时' : '规划用时'}</small></div>
+                    <div><Wallet size={17} /><strong>{route.price === null ? '待核实' : `¥${formatNumber(route.price)}`}</strong><small>预计费用</small></div>
+                    <div><Footprints size={17} /><strong>{route.walkMinutes === null ? '未知' : `${formatNumber(route.walkMinutes)} 分钟`}</strong><small>步行</small></div>
                     <div><ArrowRight size={17} /><strong>{formatNumber(route.transfers)} 次</strong><small>换乘</small></div>
                   </div>
-                  <div className="score-line"><div className="score-bar"><span style={{ width: `${barWidth}%` }} /></div><strong>{formatNumber(score)} <small>等效分钟</small></strong></div>
-                  {(route.delayMinutes > 0 || route.stopGo > 0) && <div className="route-foot">预计波动 {formatNumber(route.delayMinutes)} 分钟{route.stopGo > 0 && ` · 停走强度 ${formatNumber(route.stopGo)}/5`}</div>}
+                  <div className="score-line"><div className="score-bar"><span style={{ width: `${barWidth}%` }} /></div><strong>{score === null ? '待补费用' : formatNumber(score)} <small>{score === null ? '暂不排序' : '等效分钟'}</small></strong></div>
+                  {((route.delayMinutes ?? 0) > 0 || (route.stopGo ?? 0) > 0 || route.trafficLights != null) && <div className="route-foot">{(route.delayMinutes ?? 0) > 0 && `预计波动 ${formatNumber(route.delayMinutes!)} 分钟`}{(route.stopGo ?? 0) > 0 && ` · 停走强度 ${formatNumber(route.stopGo!)}/5`}{route.trafficLights != null && ` · 红绿灯 ${formatNumber(route.trafficLights)} 个`}</div>}
                 </article>
               })}
             </div>
-            <p className="method-note">等效分钟 = 总用时 + 费用、步行、换乘、延误与停走负担的个性化折算。数值越低越符合当前偏好。</p>
+            <p className="method-note">等效分钟 = 规划用时 + 费用、步行、换乘、延误与停走负担的个性化折算。未知费用的路线暂不参与推荐；未知延误与停走负担未计入，请结合实际判断。</p>
           </section>
         </div>
       </main>

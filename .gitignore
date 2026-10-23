@@ -9,3 +9,5 @@ android/local.properties
 android/.idea/
 *.keystore
 *.jks
+.dev.vars*
+.env*

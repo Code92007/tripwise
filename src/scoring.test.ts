@@ -15,4 +15,10 @@ describe('route ranking', () => {
     const route = sampleRoutes[0]
     expect(scoreRoute(route, presets.comfort)).toBeCloseTo(40 + 5 * 0.18 + 20 * 0.45 + 3 * 1.2)
   })
+
+  it('keeps an unpriced route visible without treating it as free', () => {
+    const unknownFare = { ...sampleRoutes[0], id: 'unpriced', price: null }
+    expect(scoreRoute(unknownFare, presets.value)).toBeNull()
+    expect(rankRoutes([unknownFare, sampleRoutes[1]], presets.value)[1].id).toBe('unpriced')
+  })
 })

@@ -31,6 +31,7 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 3px s
 .button:hover { transform: translateY(-1px); }
 .button-primary { color: #fff; background: #16866e; }
 .button-primary:hover { background: #0e735d; }
+.button:disabled { cursor: wait; opacity: .65; transform: none; }
 .button-outline { color: #50615f; background: #fff; border-color: #dce4e1; }
 .button-outline:hover { border-color: #a6c8bd; background: #f7fbf9; }
 .button-quiet { color: #4d5c59; background: #edf1ef; }
@@ -53,6 +54,10 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 3px s
 .place-field input { width: 100%; min-width: 0; padding: 7px 8px 7px 1px; border: 0; outline: 0; background: transparent; font-size: 13px; }
 .place-field:focus-within { border-color: #65b6a0; box-shadow: 0 0 0 3px #e2f5ed; }
 .field-note { margin: 12px 0 0; color: #8a9994; font-size: 11px; line-height: 1.55; }
+.query-button { width: 100%; margin-top: 13px; }
+.flight-check { display: flex; align-items: center; gap: 10px; margin-top: 13px; font-size: 11px; color: #71847c; }
+.flight-check a { color: #167f68; font-weight: 700; text-decoration: none; }
+.flight-check a:hover { text-decoration: underline; }
 .preset-list { display: grid; gap: 7px; }
 .preset { display: flex; width: 100%; align-items: center; gap: 10px; padding: 10px 11px; text-align: left; background: #fff; border: 1px solid #e2e9e5; border-radius: 5px; }
 .preset:hover { border-color: #8ac4b1; }
@@ -78,6 +83,7 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 3px s
 .results-head h2 { margin: 0; font-size: 18px; line-height: 1.3; }
 .results-head h2 span { display: inline-grid; place-items: center; min-width: 22px; height: 22px; margin-left: 5px; padding: 0 5px; border-radius: 4px; color: #4d6e63; background: #e3eee8; font-size: 11px; vertical-align: 2px; }
 .sample-banner { display: flex; align-items: center; gap: 10px; min-height: 38px; padding: 8px 12px; margin-bottom: 14px; border: 1px solid #f0dfb4; border-radius: 5px; color: #80612f; background: #fff9eb; font-size: 11px; line-height: 1.5; }
+.data-banner { padding: 9px 12px; margin-bottom: 14px; border-left: 3px solid #16866e; background: #eaf5ef; color: #326652; font-size: 11px; line-height: 1.5; }
 .sample-badge { flex: none; padding: 3px 6px; border-radius: 3px; color: #7f5b25; background: #f7e9c5; font-size: 10px; font-weight: 700; }
 .recommendation { display: flex; align-items: center; justify-content: space-between; gap: 20px; min-height: 136px; padding: 23px 26px; border-radius: 6px; color: #fff; background: #1d3935; }
 .recommendation-kicker { display: inline-flex; align-items: center; gap: 5px; color: #87dfb7; font-size: 11px; font-weight: 700; }
@@ -104,7 +110,7 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 3px s
 .route-metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin: 19px 0 16px 26px; }
 .route-metrics > div { display: grid; grid-template-columns: 17px minmax(0, 1fr); column-gap: 7px; align-items: center; }
 .route-metrics svg { grid-row: span 2; color: #849a90; }
-.route-metrics strong { color: #2b3c38; font-size: 12px; white-space: nowrap; }
+.route-metrics strong { color: #2b3c38; font-size: 12px; overflow-wrap: anywhere; }
 .route-metrics small { margin-top: 2px; color: #a1aea8; font-size: 10px; }
 .score-line { display: flex; align-items: center; gap: 15px; margin-left: 26px; }
 .score-bar { height: 6px; flex: 1; border-radius: 5px; background: #edf0ee; overflow: hidden; }
