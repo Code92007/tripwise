@@ -5,7 +5,8 @@
 ## 能做什么
 
 - 按时间、费用、步行、换乘、预计延误和停走负担计算“等效分钟”，提供体验、性价比和速度三种偏好。
-- 可选的五题偏好问卷会根据具体取舍给出参数；确认后才应用，也可以继续用滑杆调整。
+- 首次打开的新用户会看到五题偏好问卷，可本次跳过或以后不再提示；确认后才应用参数，也可以继续用滑杆调整。已有本地偏好的用户不会被重新打断。
+- 起点和终点均有高德地点补全。起点可点击定位按钮获取当前坐标并反查附近地址，授权只在点击时申请；地址和门牌号需要用户核对，定位精度不作保证。
 - 查询高德路线，展示来源、查询时间及部分查询失败的提示。自动路线与手动路线可放在一起比较；重新查询会保留手动路线。
 - 高德方案可打开分段行程：公交上下车站和换乘、步行与驾车指引，以及可缩放的路线地图。地图使用 OpenStreetMap 底图并注明来源；高德 GCJ-02 轨迹在浏览器里转换为 WGS-84 后绘制。底图不可用时仍能看文字指引。
 - 打车方案使用高德返回的出租车参考费用，备选路线按里程差粗调；缺少该字段时按距离和时间给出通用粗估。它参与偏好排序，但不连接任何叫车平台，也不是实际报价。
@@ -18,7 +19,7 @@
 
 高德 [路径规划 2.0](https://lbs.amap.com/api/webservice/guide/api/newroute) 和 [地理编码](https://lbs.amap.com/api/webservice/guide/api/georegeo/) 需要 **Web 服务类型 Key**。按[高德当前计费说明](https://lbs.amap.com/pages/base_service_price)，个人认证账号的基础 LBS 服务有月度免费配额；未认证账号没有该配额，超额可能产生费用。公开运营或商业使用应先确认授权和计费规则。
 
-Key 只放在服务端的 Cloudflare Worker Secret 或仅 root 可读的服务器 `.env` 中，不能写入 `VITE_` 变量、GitHub 仓库或 APK。路线接口施加每节点 10 秒 2 次的近似限速，仍应在高德控制台设置调用/计费提醒。一个查询最多调用 2 次地理编码、3 次公交策略、1 次驾车和 1 次步行接口。
+Key 只放在服务端的 Cloudflare Worker Secret 或仅 root 可读的服务器 `.env` 中，不能写入 `VITE_` 变量、GitHub 仓库或 APK。路线接口施加每节点 10 秒 2 次、地点提示与反查各 12 次的近似限速，仍应在高德控制台设置调用/计费提醒。一个查询最多调用 2 次地理编码或反查、3 次公交策略、1 次驾车和 1 次步行接口。输入补全会消耗高德输入提示配额，不能视为无限免费。
 
 ### 启用步骤
 
@@ -43,7 +44,7 @@ VITE_API_BASE_URL=https://你的-worker.workers.dev pnpm android:sync
 cd android && ./gradlew assembleDebug
 ```
 
-调试 APK 位于 `android/app/build/outputs/apk/debug/app-debug.apk`，也可从 GitHub Actions 的 **Android debug APK** artifact 下载。正式发布需自行配置签名。
+Android 体验版可从 [v0.2.0-preview.1 Release](https://github.com/Code92007/tripwise/releases/tag/v0.2.0-preview.1) 下载。它是可侧载的调试签名 APK，不是应用商店正式版；以后若构建签名变化，升级可能需要先卸载旧版，卸载会清除 APK 内保存的偏好。正式发布需配置稳定签名并完成商店审核。
 
 网站由 `.github/workflows/pages.yml` 发布到 GitHub Pages，首次使用需将仓库 Pages Source 设置为 **GitHub Actions**。Vite 采用相对资源路径，可部署在仓库子路径。
 

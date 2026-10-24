@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { Geolocation } from '@capacitor/geolocation'
+import gcoord from 'gcoord'
 import {
   ArrowDownUp,
   ArrowRight,
@@ -9,9 +11,9 @@ import {
   ChevronDown,
   ClipboardList,
   Clock3,
+  Download,
   Footprints,
   Map,
-  MapPin,
   Pencil,
   Plane,
   Plus,
@@ -40,12 +42,19 @@ import {
 import { searchRoutes, type RouteSearch } from './routeApi'
 import { PreferenceQuiz } from './PreferenceQuiz'
 import { RouteDetails } from './RouteDetails'
+import { PlaceInput } from './PlaceInput'
+import { reverseGeocode } from './placeApi'
+import { validSelection, type PlaceSelection } from './places'
 
 const storageKey = 'tripwise-v1'
+const onboardingKey = 'tripwise-quiz-onboarding-v1'
+const skippedKey = 'tripwise-quiz-skipped-session-v1'
 
 type SavedState = {
   origin: string
   destination: string
+  originSelection?: PlaceSelection
+  destinationSelection?: PlaceSelection
   routes: Route[]
   preset: Preset
   weights: Weights
@@ -72,6 +81,8 @@ function readSavedState(): SavedState {
     return {
       origin: typeof saved.origin === 'string' ? saved.origin : '',
       destination: typeof saved.destination === 'string' ? saved.destination : '',
+      originSelection: validSelection(saved.originSelection) ? saved.originSelection : undefined,
+      destinationSelection: validSelection(saved.destinationSelection) ? saved.destinationSelection : undefined,
       routes: saved.routes,
       preset,
       weights: validWeights ? weights : presets.comfort,
@@ -79,6 +90,19 @@ function readSavedState(): SavedState {
     }
   } catch {
     return initialState
+  }
+}
+
+function firstVisitQuiz(): boolean {
+  try {
+    let status = localStorage.getItem(onboardingKey)
+    if (!status) {
+      status = localStorage.getItem(storageKey) ? 'done' : 'pending'
+      localStorage.setItem(onboardingKey, status)
+    }
+    return status === 'pending' && !sessionStorage.getItem(skippedKey)
+  } catch {
+    return false
   }
 }
 
@@ -183,12 +207,15 @@ function App() {
   const [editing, setEditing] = useState<Route | 'new' | null>(null)
   const [viewing, setViewing] = useState<Route | null>(null)
   const [showWeights, setShowWeights] = useState(false)
-  const [showQuiz, setShowQuiz] = useState(false)
+  const [showQuiz, setShowQuiz] = useState(firstVisitQuiz)
+  const [quizOnboarding, setQuizOnboarding] = useState(showQuiz)
   const quizTrigger = useRef<HTMLButtonElement>(null)
   const [sort, setSort] = useState<'score' | 'time' | 'price'>('score')
   const [confirmedReset, setConfirmedReset] = useState(false)
   const [querying, setQuerying] = useState(false)
   const [queryError, setQueryError] = useState('')
+  const [locating, setLocating] = useState(false)
+  const [locationNote, setLocationNote] = useState('')
 
   useEffect(() => {
     localStorage.setItem(storageKey, JSON.stringify(state))
@@ -228,14 +255,44 @@ function App() {
   }
 
   function closeQuiz() {
+    if (quizOnboarding) sessionStorage.setItem(skippedKey, '1')
     setShowQuiz(false)
     window.requestAnimationFrame(() => quizTrigger.current?.focus())
   }
 
   function applyQuiz(weights: Weights) {
+    localStorage.setItem(onboardingKey, 'done')
     setState((current) => ({ ...current, preset: 'custom', weights }))
     setShowWeights(true)
     closeQuiz()
+  }
+
+  function hideQuiz() {
+    localStorage.setItem(onboardingKey, 'hidden')
+    setShowQuiz(false)
+    window.requestAnimationFrame(() => quizTrigger.current?.focus())
+  }
+
+  async function locateOrigin() {
+    setLocating(true)
+    setQueryError('')
+    setLocationNote('正在获取当前位置…')
+    try {
+      const position = await Geolocation.getCurrentPosition({ enableHighAccuracy: true, timeout: 15000, maximumAge: 0 })
+      const [longitude, latitude] = gcoord.transform(
+        [position.coords.longitude, position.coords.latitude], gcoord.WGS84, gcoord.GCJ02,
+      ) as [number, number]
+      const place = await reverseGeocode(`${longitude.toFixed(6)},${latitude.toFixed(6)}`)
+      setState((current) => ({ ...current, origin: place.label, originSelection: place }))
+      const accuracy = Math.ceil(position.coords.accuracy)
+      setLocationNote(`定位精度约 ±${accuracy} 米；请核对门牌号，可点出发地改选。`)
+    } catch (error) {
+      setLocationNote('')
+      const message = error instanceof Error ? error.message : ''
+      setQueryError(/denied|permission|拒绝/i.test(message) ? '定位权限未开启，请在系统设置中允许定位，或手动输入出发地。' : '定位失败，请检查设备定位与网络，或手动输入出发地。')
+    } finally {
+      setLocating(false)
+    }
   }
 
   async function queryRoutes() {
@@ -243,7 +300,7 @@ function App() {
     setQueryError('')
     setQuerying(true)
     try {
-      const result = await searchRoutes(state.origin.trim(), state.destination.trim())
+      const result = await searchRoutes(state.origin.trim(), state.destination.trim(), state.originSelection, state.destinationSelection)
       const { routes, ...lastQuery } = result
       setState((current) => ({ ...current, routes: [...current.routes.filter((route) => route.source === 'manual' || (!route.source && !route.id.startsWith('sample-'))), ...routes], lastQuery }))
       setSort('score')
@@ -259,7 +316,7 @@ function App() {
       <header className="topbar">
         <div className="topbar-inner">
           <div className="brand"><span className="brand-mark"><RouteIcon size={21} strokeWidth={2.2} /></span><span>途衡</span><small>TRIPWISE</small></div>
-          <span className="topbar-status"><span className="status-dot" />路线方案比较</span>
+          <div className="topbar-links"><span className="topbar-status"><span className="status-dot" />路线方案比较</span><a href="https://github.com/Code92007/tripwise/releases/tag/v0.2.0-preview.1" target="_blank" rel="noopener noreferrer" title="下载 Android 体验版 APK"><Download size={15} />Android 体验版</a></div>
         </div>
       </header>
 
@@ -277,10 +334,15 @@ function App() {
             <section className="control-section journey-section">
               <div className="section-title"><h2>本次行程</h2><span className="section-index">01</span></div>
               <div className="place-fields">
-                <label className="place-field"><span className="place-icon origin"><MapPin size={16} /></span><span className="sr-only">出发地</span><input value={state.origin} placeholder="输入出发地" onChange={(event) => setState({ ...state, origin: event.target.value })} /></label>
+                <PlaceInput kind="origin" value={state.origin} selection={state.originSelection} locating={locating} onLocate={locateOrigin}
+                  onChange={(origin) => { setLocationNote(''); setState((current) => ({ ...current, origin, originSelection: undefined })) }}
+                  onSelect={(place) => { setLocationNote(''); setState((current) => ({ ...current, origin: place.label, originSelection: place })) }} />
                 <div className="place-connector" />
-                <label className="place-field"><span className="place-icon destination"><MapPin size={16} /></span><span className="sr-only">目的地</span><input value={state.destination} placeholder="输入目的地" onChange={(event) => setState({ ...state, destination: event.target.value })} /></label>
+                <PlaceInput kind="destination" value={state.destination} selection={state.destinationSelection}
+                  onChange={(destination) => setState((current) => ({ ...current, destination, destinationSelection: undefined }))}
+                  onSelect={(place) => setState((current) => ({ ...current, destination: place.label, destinationSelection: place }))} />
               </div>
+              {locationNote && <p className="location-note" role="status">{locationNote}</p>}
               <button className="button button-primary query-button" onClick={queryRoutes} disabled={querying}><Search size={16} />{querying ? '查询中…' : '查询路线'}</button>
               {queryError && <p className="form-error" role="alert">{queryError}</p>}
               <p className="field-note">{import.meta.env.VITE_API_BASE_URL ? '查询高德公交、驾车与步行候选方案。' : '尚未配置路线服务；你仍可手动比较方案。'}</p>
@@ -301,7 +363,7 @@ function App() {
                   </button>
                 ))}
               </div>
-              <button ref={quizTrigger} className="quiz-entry" type="button" onClick={() => setShowQuiz(true)}><ClipboardList size={17} /><span>做偏好问卷</span><ArrowRight size={16} /></button>
+              <button ref={quizTrigger} className="quiz-entry" type="button" onClick={() => { setQuizOnboarding(false); setShowQuiz(true) }}><ClipboardList size={17} /><span>做偏好问卷</span><ArrowRight size={16} /></button>
               <button className={`tune-toggle ${showWeights ? 'open' : ''}`} aria-expanded={showWeights} onClick={() => setShowWeights(!showWeights)}><SlidersHorizontal size={16} />微调偏好<ChevronDown size={16} /></button>
               {showWeights && <div className="weight-list">
                 {weightFields.map((field) => <label className="weight-field" key={field.key} title={field.hint}>
@@ -310,7 +372,7 @@ function App() {
                 </label>)}
               </div>}
             </section>
-            <p className="privacy-note"><BadgeHelp size={15} />方案与偏好保存在当前设备；查询时起终点会发送至高德地图。</p>
+            <p className="privacy-note"><BadgeHelp size={15} />方案与偏好保存在当前设备；点定位时坐标会发送至高德解析地址，查询时起终点会发送至高德。</p>
           </aside>
 
           <section className="results" aria-labelledby="results-title">
@@ -359,7 +421,7 @@ function App() {
       </main>
       {editing && <RouteEditor key={editing === 'new' ? 'new' : editing.id} route={editing === 'new' ? undefined : editing} onSave={saveRoute} onClose={() => setEditing(null)} />}
       {viewing && <RouteDetails route={viewing} onClose={() => setViewing(null)} />}
-      {showQuiz && <PreferenceQuiz onApply={applyQuiz} onClose={closeQuiz} />}
+      {showQuiz && <PreferenceQuiz onApply={applyQuiz} onClose={closeQuiz} onHide={hideQuiz} onboarding={quizOnboarding} />}
     </div>
   )
 }

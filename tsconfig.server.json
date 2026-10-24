@@ -9,6 +9,6 @@
     "skipLibCheck": true,
     "noEmit": true
   },
-  "include": ["server/**/*.ts", "worker/index.ts", "src/amap.ts", "src/scoring.ts"],
+  "include": ["server/**/*.ts", "worker/index.ts", "src/amap.ts", "src/places.ts", "src/scoring.ts"],
   "exclude": ["**/*.test.ts"]
 }

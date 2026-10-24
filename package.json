@@ -1,7 +1,7 @@
 {
   "name": "tripwise",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.2.0-preview.1",
   "type": "module",
   "scripts": {
     "dev": "vite --host 0.0.0.0",
@@ -15,6 +15,7 @@
   "dependencies": {
     "@capacitor/android": "^8.0.0",
     "@capacitor/core": "^8.0.0",
+    "@capacitor/geolocation": "^8.2.4",
     "gcoord": "^1.0.7",
     "leaflet": "^1.9.4",
     "lucide-react": "^0.468.0",

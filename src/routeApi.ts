@@ -1,4 +1,5 @@
 import { isRoute, type Route } from './scoring'
+import type { PlaceSelection } from './places'
 
 export type RouteSearch = {
   origin: string
@@ -9,7 +10,7 @@ export type RouteSearch = {
   warnings: string[]
 }
 
-export async function searchRoutes(origin: string, destination: string): Promise<RouteSearch> {
+export async function searchRoutes(origin: string, destination: string, originSelection?: PlaceSelection, destinationSelection?: PlaceSelection): Promise<RouteSearch> {
   const base = import.meta.env.VITE_API_BASE_URL?.trim()
   if (!base) throw new Error('路线服务尚未配置，请先部署接口并设置 VITE_API_BASE_URL')
   let response: Response
@@ -17,7 +18,7 @@ export async function searchRoutes(origin: string, destination: string): Promise
     response = await fetch(`${base.replace(/\/$/, '')}/api/routes`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ origin, destination }),
+      body: JSON.stringify({ origin, destination, originSelection, destinationSelection }),
     })
   } catch {
     throw new Error('无法连接路线服务，请检查网络或接口地址')

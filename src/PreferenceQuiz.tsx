@@ -3,7 +3,7 @@ import { ArrowLeft, ArrowRight, Check, RotateCcw, X } from 'lucide-react'
 import type { Weights } from './scoring'
 import { preferenceQuestions, weightsFromAnswers } from './quizConfig'
 
-export function PreferenceQuiz({ onApply, onClose }: { onApply: (weights: Weights) => void; onClose: () => void }) {
+export function PreferenceQuiz({ onApply, onClose, onHide, onboarding = false }: { onApply: (weights: Weights) => void; onClose: () => void; onHide?: () => void; onboarding?: boolean }) {
   const [step, setStep] = useState(0)
   const [answers, setAnswers] = useState<Partial<Weights>>({})
   const heading = useRef<HTMLHeadingElement>(null)
@@ -57,6 +57,7 @@ export function PreferenceQuiz({ onApply, onClose }: { onApply: (weights: Weight
             <button className="button button-primary" type="button" onClick={() => onApply(proposal)}><Check size={16} />应用偏好</button>
           </div>
         </>}
+        {onboarding && <div className="quiz-onboarding-actions"><button type="button" onClick={onClose}>本次不做</button><button type="button" onClick={onHide}>以后不再提示</button></div>}
       </section>
     </div>
   )

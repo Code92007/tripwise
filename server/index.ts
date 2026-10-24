@@ -7,7 +7,7 @@ import { handleRequest } from '../worker/index'
 const dist = resolve(fileURLToPath(new URL('../dist/', import.meta.url)))
 const port = Number(process.env.PORT || 8093)
 const host = process.env.HOST || '127.0.0.1'
-const origins = process.env.ALLOWED_ORIGINS || 'https://tuheng.wannafly.cn,https://code92007.github.io'
+const origins = process.env.ALLOWED_ORIGINS || 'https://tuheng.wannafly.cn,https://code92007.github.io,https://localhost,http://localhost:5173,http://127.0.0.1:5173'
 const mime: Record<string, string> = {
   '.html': 'text/html; charset=utf-8',
   '.js': 'text/javascript; charset=utf-8',
@@ -19,22 +19,20 @@ const mime: Record<string, string> = {
   '.webp': 'image/webp',
 }
 
-let windowStart = 0
-let windowCount = 0
+const windows = new Map<string, { start: number; count: number }>()
+function limit(key: string, max: number) {
+  const now = Date.now()
+  const current = windows.get(key)
+  const window = !current || now - current.start >= 10000 ? { start: now, count: 0 } : current
+  window.count += 1
+  windows.set(key, window)
+  return { success: window.count <= max }
+}
 const env = {
   AMAP_WEB_KEY: process.env.AMAP_WEB_KEY,
   ALLOWED_ORIGINS: origins,
-  ROUTE_LIMIT: {
-    async limit() {
-      const now = Date.now()
-      if (now - windowStart >= 10000) {
-        windowStart = now
-        windowCount = 0
-      }
-      windowCount += 1
-      return { success: windowCount <= 2 }
-    },
-  },
+  ROUTE_LIMIT: { async limit({ key }: { key: string }) { return limit(key, 2) } },
+  LOOKUP_LIMIT: { async limit({ key }: { key: string }) { return limit(key, 12) } },
 }
 
 async function serveApi(req: IncomingMessage, res: ServerResponse, url: URL) {

@@ -45,3 +45,44 @@ it('returns normalized live routes without exposing the key', async () => {
   expect(fetcher.mock.calls.filter(([url]) => !url.includes('geocode')).every(([url]) => new URL(url).searchParams.get('show_fields') === 'cost,polyline')).toBe(true)
   expect(JSON.stringify(result)).not.toContain('test-secret')
 })
+
+it('returns only located suggestions and reverse geocodes a coordinate', async () => {
+  const fetcher = vi.fn(async (input: string) => {
+    const url = new URL(input)
+    if (url.pathname.includes('inputtips')) return new Response(JSON.stringify({ status: '1', tips: [
+      { name: '沙岗路233号', district: '广州市海珠区', location: '113.300001,23.100001', adcode: '440105' },
+      { name: '公交线路', location: [] },
+    ] }))
+    return new Response(JSON.stringify({ status: '1', regeocode: { formatted_address: '广东省广州市海珠区沙岗路233号', addressComponent: { citycode: '020', adcode: '440105', streetNumber: { street: '沙岗路', number: '233号' } } } }))
+  }) as typeof fetch
+  const suggest = await handleRequest(new Request('https://worker.example/api/suggest?query=沙岗路', { headers: { Origin: 'https://code92007.github.io' } }), env, fetcher)
+  expect(suggest.status).toBe(200)
+  expect((await suggest.json() as { places: unknown[] }).places).toHaveLength(1)
+  const locate = await handleRequest(new Request('https://worker.example/api/locate', {
+    method: 'POST', body: JSON.stringify({ location: '113.300001,23.100001' }),
+  }), env, fetcher)
+  const located = await locate.json() as { place: { label: string; location: string } }
+  expect(located.place.label).toContain('沙岗路233号')
+  expect(located.place.location).toBe('113.300001,23.100001')
+  expect(JSON.stringify(located)).not.toContain('test-secret')
+})
+
+it('uses selected coordinates without geocoding their labels again', async () => {
+  const fetcher = vi.fn(async (input: string) => {
+    const url = new URL(input)
+    if (url.pathname.includes('/v3/geocode/geo')) throw new Error('selected place must not be geocoded')
+    if (url.pathname.includes('/v3/geocode/regeo')) return new Response(JSON.stringify({ status: '1', regeocode: { formatted_address: '出发地', addressComponent: { citycode: '020' } } }))
+    if (url.pathname.includes('walking')) return new Response(JSON.stringify({ status: '1', route: { paths: [{ cost: { duration: '1200' } }] } }))
+    return new Response(JSON.stringify({ status: '1', route: {} }))
+  }) as typeof fetch
+  const response = await handleRequest(new Request('https://worker.example/api/routes', {
+    method: 'POST', body: JSON.stringify({
+      origin: '广州沙岗路233号', destination: '广州塔',
+      originSelection: { label: '广州沙岗路233号', location: '113.300001,23.100001' },
+      destinationSelection: { label: '广州塔', location: '113.320001,23.110001', citycode: '020' },
+    }),
+  }), env, fetcher)
+  expect(response.status).toBe(200)
+  const directions = fetcher.mock.calls.map(([input]) => new URL(input)).filter((url) => url.pathname.includes('/direction/'))
+  expect(directions.every((url) => url.searchParams.get('origin') === '113.300001,23.100001' && url.searchParams.get('destination') === '113.320001,23.110001')).toBe(true)
+})
