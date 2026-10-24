@@ -7,7 +7,7 @@ import { handleRequest } from '../worker/index'
 const dist = resolve(fileURLToPath(new URL('../dist/', import.meta.url)))
 const port = Number(process.env.PORT || 8093)
 const host = process.env.HOST || '127.0.0.1'
-const origins = process.env.ALLOWED_ORIGINS || 'https://tuheng.wannafly.cn,https://code92007.github.io,https://localhost,http://localhost:5173,http://127.0.0.1:5173'
+const origins = process.env.ALLOWED_ORIGINS || 'https://tuheng.wannafly.cn,https://code92007.github.io,https://localhost,capacitor://localhost,http://localhost:5173,http://127.0.0.1:5173'
 const mime: Record<string, string> = {
   '.html': 'text/html; charset=utf-8',
   '.js': 'text/javascript; charset=utf-8',
@@ -17,6 +17,7 @@ const mime: Record<string, string> = {
   '.png': 'image/png',
   '.ico': 'image/x-icon',
   '.webp': 'image/webp',
+  '.webmanifest': 'application/manifest+json; charset=utf-8',
 }
 
 const windows = new Map<string, { start: number; count: number }>()

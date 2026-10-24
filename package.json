@@ -10,12 +10,15 @@
     "preview": "vite preview --host 0.0.0.0",
     "test": "vitest run",
     "android:sync": "pnpm build && cap sync android",
-    "android:open": "cap open android"
+    "android:open": "cap open android",
+    "ios:sync": "pnpm build && cap sync ios",
+    "ios:open": "cap open ios"
   },
   "dependencies": {
     "@capacitor/android": "^8.0.0",
     "@capacitor/core": "^8.0.0",
     "@capacitor/geolocation": "^8.2.4",
+    "@capacitor/ios": "^8.5.3",
     "gcoord": "^1.0.7",
     "leaflet": "^1.9.4",
     "lucide-react": "^0.468.0",

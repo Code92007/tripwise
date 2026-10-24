@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Geolocation } from '@capacitor/geolocation'
+import { Capacitor } from '@capacitor/core'
 import gcoord from 'gcoord'
 import {
   ArrowDownUp,
@@ -49,6 +50,7 @@ import { validSelection, type PlaceSelection } from './places'
 const storageKey = 'tripwise-v1'
 const onboardingKey = 'tripwise-quiz-onboarding-v1'
 const skippedKey = 'tripwise-quiz-skipped-session-v1'
+const isAppleDevice = Capacitor.getPlatform() === 'ios' || /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
 
 type SavedState = {
   origin: string
@@ -316,7 +318,7 @@ function App() {
       <header className="topbar">
         <div className="topbar-inner">
           <div className="brand"><span className="brand-mark"><RouteIcon size={21} strokeWidth={2.2} /></span><span>途衡</span><small>TRIPWISE</small></div>
-          <div className="topbar-links"><span className="topbar-status"><span className="status-dot" />路线方案比较</span><a href="https://github.com/Code92007/tripwise/releases/tag/v0.2.0-preview.1" target="_blank" rel="noopener noreferrer" title="下载 Android 体验版 APK"><Download size={15} />Android 体验版</a></div>
+          <div className="topbar-links"><span className="topbar-status"><span className="status-dot" />路线方案比较</span>{!isAppleDevice && <a href="https://github.com/Code92007/tripwise/releases/tag/v0.2.0-preview.1" target="_blank" rel="noopener noreferrer" title="下载 Android 体验版 APK"><Download size={15} />Android 体验版</a>}</div>
         </div>
       </header>
 

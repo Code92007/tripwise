@@ -1,0 +1,14 @@
+{
+  "name": "途衡 Tripwise",
+  "short_name": "途衡",
+  "description": "按个人偏好比较出行方案",
+  "start_url": ".",
+  "scope": ".",
+  "display": "standalone",
+  "background_color": "#f4f6f5",
+  "theme_color": "#182b2b",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png" }
+  ]
+}

@@ -3,6 +3,14 @@ import { handleRequest } from './index'
 
 const env = { AMAP_WEB_KEY: 'test-secret', ALLOWED_ORIGINS: 'https://code92007.github.io' }
 
+it('allows the native iOS WebView origin when configured', async () => {
+  const response = await handleRequest(new Request('https://worker.example/api/routes', {
+    method: 'OPTIONS', headers: { Origin: 'capacitor://localhost' },
+  }), { ...env, ALLOWED_ORIGINS: `${env.ALLOWED_ORIGINS},capacitor://localhost` })
+  expect(response.status).toBe(204)
+  expect(response.headers.get('Access-Control-Allow-Origin')).toBe('capacitor://localhost')
+})
+
 it('rejects invalid input before calling the provider', async () => {
   const fetcher = vi.fn()
   const response = await handleRequest(new Request('https://worker.example/api/routes', {

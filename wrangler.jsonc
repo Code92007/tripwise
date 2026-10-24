@@ -13,6 +13,6 @@
     "simple": { "limit": 12, "period": 10 }
   }],
   "vars": {
-    "ALLOWED_ORIGINS": "https://code92007.github.io,http://localhost:5173,http://127.0.0.1:5173,https://localhost"
+    "ALLOWED_ORIGINS": "https://code92007.github.io,http://localhost:5173,http://127.0.0.1:5173,https://localhost,capacitor://localhost"
   }
 }

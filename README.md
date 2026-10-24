@@ -1,6 +1,6 @@
 # 途衡 Tripwise
 
-按个人偏好比较出行方案的网页和 Android 工程。输入起终点后，可通过高德 Web 服务查询中国境内的公交、跨城公共交通、驾车和步行候选路线；同一页面也支持自行补充高铁、航班或组合方案。
+按个人偏好比较出行方案的网页、Android 和 iOS 工程。输入起终点后，可通过高德 Web 服务查询中国境内的公交、跨城公共交通、驾车和步行候选路线；同一页面也支持自行补充高铁、航班或组合方案。
 
 ## 能做什么
 
@@ -11,7 +11,7 @@
 - 高德方案可打开分段行程：公交上下车站和换乘、步行与驾车指引，以及可缩放的路线地图。地图使用 OpenStreetMap 底图并注明来源；高德 GCJ-02 轨迹在浏览器里转换为 WGS-84 后绘制。底图不可用时仍能看文字指引。
 - 打车方案使用高德返回的出租车参考费用，备选路线按里程差粗调；缺少该字段时按距离和时间给出通用粗估。它参与偏好排序，但不连接任何叫车平台，也不是实际报价。
 - 缺失票价时显示“待核实”，该路线暂不参加综合推荐；高德未返回的延误和停走强度不伪装为零。
-- 数据保存在本机浏览器或 APK 的 WebView 中。示例方案只是演示，不是实时数据。
+- 数据保存在当前浏览器、主屏幕网页应用或原生应用的本地 WebView 中；它们各自的偏好数据不会自动同步。示例方案只是演示，不是实时数据。
 
 高德路径规划是出发时的估计，**不是持续刷新的导航**。驾车用时未包含等车和上下车；打车粗估不含动态加价、夜间附加费及可能的通行费。跨城公交或铁路方案的车次、库存和票价需要复核。当前没有航班实时搜索或自动的“高铁 + 航班”组合优化。页面提供携程、去哪儿官方入口供人工核价。旧版已保存的查询结果需重新查询一次才能看到行程详情。
 
@@ -27,7 +27,7 @@ Key 只放在服务端的 Cloudflare Worker Secret 或仅 root 可读的服务�
 
 1. 在[高德控制台](https://console.amap.com/dev/key/app)注册并完成个人认证，新建应用，申请 **Web 服务** Key。
 2. 注册 Cloudflare 账号。在 macOS 终端进入本仓库，运行 `pnpm exec wrangler login` 和 `pnpm exec wrangler secret put AMAP_WEB_KEY`，按提示输入 Key，再运行 `pnpm exec wrangler deploy`。Worker 配置位于 `wrangler.jsonc`。部署地址通常是 `https://tripwise-routes.<账号子域>.workers.dev`。
-3. 在 GitHub 仓库 **Settings → Secrets and variables → Actions → Variables** 新增 `API_BASE_URL`，值为上述 Worker 的根地址（不加 `/api/routes`）。重新运行 **Web and Pages** 与 **Android debug APK** 工作流。此地址是公开的，Key 不在其中。
+3. 在 GitHub 仓库 **Settings → Secrets and variables → Actions → Variables** 新增 `API_BASE_URL`，值为上述 Worker 的根地址（不加 `/api/routes`）。重新运行 **Web and Pages** 与 **Android debug APK** 工作流。此地址是公开的，Key 不在其中。iOS 原生构建时同样要设置 `VITE_API_BASE_URL`。
 4. 本地调试：在忽略提交的 `.dev.vars` 中设置 `AMAP_WEB_KEY=...`，运行 `pnpm exec wrangler dev`；另开终端运行 `VITE_API_BASE_URL=http://127.0.0.1:8787 pnpm dev`。本地浏览器使用 `http://127.0.0.1:5173`。如果 Vite 选择其他端口，需把其来源加入 `wrangler.jsonc` 的 `ALLOWED_ORIGINS`。
 
 未完成这些步骤前，“查询路线”会说明服务尚未配置，手动比较仍可使用。
@@ -45,6 +45,20 @@ cd android && ./gradlew assembleDebug
 ```
 
 Android 体验版可从 [v0.2.0-preview.1 Release](https://github.com/Code92007/tripwise/releases/tag/v0.2.0-preview.1) 下载。它是可侧载的调试签名 APK，不是应用商店正式版；以后若构建签名变化，升级可能需要先卸载旧版，卸载会清除 APK 内保存的偏好。正式发布需配置稳定签名并完成商店审核。
+
+### iPhone 使用
+
+现在可在 iPhone 的 Safari 打开 [tuheng.wannafly.cn](https://tuheng.wannafly.cn/)，点分享按钮，再选“添加到主屏幕”。途衡会以独立窗口启动，使用同一套路线查询、问卷和定位功能。首次定位需同意 Safari/主屏幕应用的定位权限；定位要求 HTTPS 和设备开启位置服务。GitHub Pages 地址也可用，但建议用自有域名以便长期保留同一份本地偏好。
+
+仓库的 `ios/` 是 Capacitor 原生 iOS 工程。要把它安装到自己的 iPhone，需在 Mac 安装完整版 [Xcode](https://developer.apple.com/xcode/)（Capacitor 8 要求 Xcode 26+），然后：
+
+```bash
+pnpm install --frozen-lockfile
+VITE_API_BASE_URL=https://tuheng.wannafly.cn pnpm ios:sync
+pnpm ios:open
+```
+
+在 Xcode 的 **App → Signing & Capabilities** 选择自己的 Team，若 `com.tripwise.app` 与别人的 Bundle ID 冲突，改成自己的唯一 ID。连接 iPhone，选设备并点 Run；首次安装可能需要在手机上启用开发者模式并信任开发者。免费的 Apple 个人团队可在自己的设备测试，签名有效期较短；提交 App Store 则需要 Apple Developer Program。当前仓库没有签名证书，因此不会把未签名的构建称为可安装 IPA。
 
 网站由 `.github/workflows/pages.yml` 发布到 GitHub Pages，首次使用需将仓库 Pages Source 设置为 **GitHub Actions**。Vite 采用相对资源路径，可部署在仓库子路径。
 
