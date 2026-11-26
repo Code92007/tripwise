@@ -11,6 +11,7 @@ export type RouteLeg = {
   distanceMeters?: number
   viaStops?: number
   path: Coordinate[]
+  pathIsSchematic?: boolean
 }
 
 export type RouteDetails = {

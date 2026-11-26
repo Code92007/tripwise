@@ -1,0 +1,109 @@
+{
+  "status": "1",
+  "route": {
+    "origin": "121.430041,31.154579",
+    "destination": "120.557350,29.983219",
+    "transits": [
+      {
+        "cost": {
+          "duration": "7020",
+          "transit_fee": "141.000000"
+        },
+        "distance": "212365",
+        "walking_distance": "",
+        "nightflag": "",
+        "segments": [
+          {
+            "railway": {
+              "id": "101010226213",
+              "time": "4080",
+              "name": "G7545(上海南-瑞安)",
+              "trip": "G7545",
+              "distance": "198174",
+              "type": "G字头的高铁火车",
+              "departure_stop": {
+                "id": "B00155DNI5",
+                "name": "上海南",
+                "location": "121.429462 31.153127",
+                "adcode": "310104",
+                "time": "1551",
+                "start": "1"
+              },
+              "arrival_stop": {
+                "id": "B023F0PZUW",
+                "name": "绍兴北",
+                "location": "120.539485 30.098661",
+                "adcode": "330602",
+                "time": "1659",
+                "end": "0"
+              }
+            }
+          },
+          {
+            "taxi": {
+              "distance": "14083",
+              "price": "",
+              "drivetime": "1020",
+              "polyline": {
+                "polyline": ""
+              },
+              "startpoint": "120.539485,30.098661",
+              "startname": "绍兴北",
+              "endpoint": "120.557350,29.983219",
+              "endname": ""
+            }
+          }
+        ]
+      },
+      {
+        "cost": {
+          "duration": "12540",
+          "transit_fee": "154.000000"
+        },
+        "distance": "238910",
+        "walking_distance": "",
+        "nightflag": "",
+        "segments": [
+          {
+            "railway": {
+              "id": "101020693023",
+              "time": "4800",
+              "name": "D3131(上海虹桥-武平)",
+              "trip": "D3131",
+              "distance": "201474",
+              "type": "D字头的动车火车",
+              "departure_stop": {
+                "id": "B00155MPRL",
+                "name": "上海虹桥",
+                "location": "121.320081 31.193964",
+                "adcode": "310112",
+                "time": "0741",
+                "start": "1"
+              },
+              "arrival_stop": {
+                "id": "B023F0PZUW",
+                "name": "绍兴北",
+                "location": "120.539485 30.098661",
+                "adcode": "330602",
+                "time": "0901",
+                "end": "0"
+              }
+            },
+            "taxi": {
+              "distance": "18398",
+              "price": "",
+              "drivetime": "2160",
+              "polyline": {
+                "polyline": ""
+              },
+              "startpoint": "121.430041,31.154579",
+              "startname": "",
+              "endpoint": "121.320081,31.193964",
+              "endname": "上海虹桥"
+            }
+          }
+        ]
+      }
+    ]
+  }
+}

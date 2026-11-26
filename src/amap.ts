@@ -11,7 +11,7 @@ function items(value: unknown): Data[] {
 }
 
 function number(value: unknown): number | null {
-  if (value === '' || value === null || value === undefined) return null
+  if ((typeof value !== 'string' && typeof value !== 'number') || String(value).trim() === '') return null
   const result = Number(value)
   return Number.isFinite(result) && result >= 0 ? result : null
 }
@@ -26,7 +26,11 @@ function text(value: unknown): string {
 }
 
 function coordinate(value: unknown): Coordinate | null {
-  const parts = text(value).split(',').map(Number)
+  const raw = text(value).trim()
+  if (!raw) return null
+  const values = raw.split(/[,\s]+/)
+  if (values.some((part) => !part)) return null
+  const parts = values.map(Number)
   return parts.length === 2 && parts.every(Number.isFinite) && Math.abs(parts[0]) <= 180 && Math.abs(parts[1]) <= 90
     ? [parts[0], parts[1]] : null
 }
@@ -47,6 +51,14 @@ function routeDetails(route: Data, legs: RouteLeg[]): RouteDetails {
   return { origin: coordinate(route.origin), destination: coordinate(route.destination), legs }
 }
 
+function legPath(value: unknown, start: unknown, end: unknown): Pick<RouteLeg, 'path' | 'pathIsSchematic'> {
+  const path = polyline(value)
+  if (path.length > 1) return { path }
+  const from = coordinate(start)
+  const to = coordinate(end)
+  return from && to ? { path: [from, to], pathIsSchematic: true } : { path }
+}
+
 function meters(value: unknown): number | undefined {
   return number(value) ?? undefined
 }
@@ -64,14 +76,43 @@ function walkLeg(walking: Data, destination: string): RouteLeg | null {
   }
 }
 
-function transitLegs(segments: Data[]): RouteLeg[] {
+type PlaceNames = { origin: string; destination: string }
+
+function transitLegs(segments: Data[], route: Data, names?: PlaceNames): RouteLeg[] {
   const legs: RouteLeg[] = []
   for (const segment of segments) {
     const busline = items(object(segment.bus).buslines)[0]
     const rail = object(segment.railway)
-    const departure = text(object(busline?.departure_stop).name) || text(object(rail.departure_stop).name)
-    const walk = walkLeg(object(segment.walking), departure)
+    const taxi = object(segment.taxi)
+    const hasTaxi = Object.keys(taxi).length > 0
+    const ride = busline || rail
+    const departureStop = object(ride.departure_stop)
+    const arrivalStop = object(ride.arrival_stop)
+    const departure = text(departureStop.name)
+    // Cross-city responses can put the access taxi and train in the same segment.
+    // Compare their endpoints to keep both access and onward taxis in travel order.
+    const gap = (a: unknown, b: unknown) => {
+      const start = coordinate(a)
+      const end = coordinate(b)
+      return start && end ? Math.hypot(start[0] - end[0], start[1] - end[1]) : Infinity
+    }
+    const taxiFirst = hasTaxi && gap(taxi.endpoint, departureStop.location) <= gap(taxi.startpoint, arrivalStop.location)
+    const endpointName = (point: unknown, fallback: string) => {
+      if (gap(point, route.origin) < 0.0001) return names?.origin || '出发地'
+      if (gap(point, route.destination) < 0.0001) return names?.destination || '目的地'
+      return fallback
+    }
+    const taxiLeg: RouteLeg | null = hasTaxi ? {
+      mode: 'drive', instruction: '打车接续',
+      from: text(taxi.startname) || endpointName(taxi.startpoint, taxiFirst ? '上车点' : text(arrivalStop.name) || '上车点'),
+      to: text(taxi.endname) || endpointName(taxi.endpoint, taxiFirst ? departure || '下车点' : '下车点'),
+      minutes: minutes(taxi.drivetime) ?? undefined,
+      distanceMeters: meters(taxi.distance),
+      ...legPath(taxi.polyline, taxi.startpoint, taxi.endpoint),
+    } : null
+    const walk = walkLeg(object(segment.walking), taxiFirst ? taxiLeg?.from || departure : departure)
     if (walk) legs.push(walk)
+    if (taxiFirst && taxiLeg) legs.push(taxiLeg)
     if (busline) {
       const name = text(busline.name).split('(')[0] || '公共交通'
       legs.push({
@@ -79,17 +120,19 @@ function transitLegs(segments: Data[]): RouteLeg[] {
         from: text(object(busline.departure_stop).name), to: text(object(busline.arrival_stop).name),
         minutes: minutes(object(busline.cost).duration) ?? undefined,
         distanceMeters: meters(busline.distance), viaStops: items(busline.via_stops).length,
-        path: polyline(busline.polyline),
+        ...legPath(busline.polyline, departureStop.location, arrivalStop.location),
       })
-    } else if (Object.keys(rail).length) {
+    }
+    if (Object.keys(rail).length) {
       legs.push({
         mode: 'rail', instruction: `乘坐${text(rail.name) || '火车'}`,
         from: text(object(rail.departure_stop).name), to: text(object(rail.arrival_stop).name),
         minutes: minutes(rail.time) ?? undefined,
         distanceMeters: meters(rail.distance),
-        path: polyline(rail.polyline),
+        ...legPath(rail.polyline, object(rail.departure_stop).location, object(rail.arrival_stop).location),
       })
     }
+    if (!taxiFirst && taxiLeg) legs.push(taxiLeg)
   }
   return legs
 }
@@ -129,30 +172,30 @@ export function parseGeocode(payload: unknown): Place | null {
   }
 }
 
-function transitName(segments: Data[], index: number): string {
-  const names = segments.map((segment) => text(items(object(segment.bus).buslines)[0]?.name).split('(')[0])
-  const railway = segments.some((segment) => items(object(segment.railway).spaces).length > 0 || Boolean(object(segment.railway).name))
+function transitName(legs: RouteLeg[], index: number): string {
+  const names = legs.filter((leg) => leg.mode !== 'walk').map((leg) => leg.mode === 'drive' ? '打车' : leg.instruction.replace(/^乘坐/, '').split('(')[0])
   const label = [...new Set(names.filter(Boolean))].slice(0, 2).join(' → ')
-  return label || (railway ? `铁路组合 ${index + 1}` : `公共交通 ${index + 1}`)
+  return label || `公共交通 ${index + 1}`
 }
 
-export function parseTransit(payload: unknown): Route[] {
+export function parseTransit(payload: unknown, names?: PlaceNames): Route[] {
   const route = object(object(payload).route)
   return items(route.transits).flatMap((transit, index) => {
     const duration = minutes(object(transit.cost).duration ?? transit.duration)
     if (duration === null || duration === 0) return []
     const segments = items(transit.segments)
+    const legs = transitLegs(segments, route, names)
     const walkingDurations = segments.map((segment) => minutes(object(object(segment.walking).cost).duration ?? object(segment.walking).duration))
     const walkMinutes = walkingDurations.length > 0 && walkingDurations.every((value) => value !== null)
       ? walkingDurations.reduce<number>((sum, value) => sum + (value ?? 0), 0) : null
     const fares = segments.map((segment) => number(object(segment.cost).transit_fee))
     const fare = number(object(transit.cost).transit_fee ?? transit.transit_fee)
       ?? (fares.length > 0 && fares.every((value) => value !== null) ? fares.reduce<number>((sum, value) => sum + (value ?? 0), 0) : null)
-    const rides = segments.reduce((count, segment) => count + (items(object(segment.bus).buslines).length ? 1 : 0) + (Object.keys(object(segment.railway)).length ? 1 : 0), 0)
+    const rides = legs.filter((leg) => leg.mode !== 'walk').length
     const railway = segments.some((segment) => Object.keys(object(segment.railway)).length > 0)
     return [{
       id: `amap-transit-${index}-${duration}-${rides}`,
-      name: transitName(segments, index),
+      name: transitName(legs, index),
       mode: railway ? 'mixed' as const : 'transit' as const,
       minutes: duration,
       price: fare,
@@ -162,7 +205,7 @@ export function parseTransit(payload: unknown): Route[] {
       stopGo: null,
       note: railway ? '高德跨城公共交通方案；铁路班次与票价请另行核实' : '高德公共交通规划；班次与票价请核实',
       source: 'amap' as const,
-      details: routeDetails(route, transitLegs(segments)),
+      details: routeDetails(route, legs),
     }]
   })
 }

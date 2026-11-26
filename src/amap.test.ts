@@ -1,7 +1,47 @@
 import { describe, expect, it } from 'vitest'
 import { parseDriving, parseTransit, parseWalking, uniqueRoutes } from './amap'
+import crossCity from './fixtures/amap-cross-city.json'
 
 describe('AMap response mapping', () => {
+  it('keeps the onward taxi after arriving at Shaoxing North in a real cross-city response', () => {
+    const [route] = parseTransit(crossCity, { origin: '上海南站', destination: '绍兴职业技术学院' })
+    expect(route).toMatchObject({ name: 'G7545 → 打车', minutes: 117, price: 141, transfers: 1 })
+    expect(route.details?.legs).toMatchObject([
+      { mode: 'rail', from: '上海南', to: '绍兴北', minutes: 68, pathIsSchematic: true,
+        path: [[121.429462, 31.153127], [120.539485, 30.098661]] },
+      { mode: 'drive', instruction: '打车接续', from: '绍兴北', to: '绍兴职业技术学院', minutes: 17,
+        distanceMeters: 14083, pathIsSchematic: true, path: [[120.539485, 30.098661], [120.557350, 29.983219]] },
+    ])
+  })
+
+  it('orders the access taxi before its train when both are in the same segment', () => {
+    const [, route] = parseTransit(crossCity)
+    expect(route.details?.legs.map((leg) => [leg.mode, leg.from, leg.to])).toEqual([
+      ['drive', '出发地', '上海虹桥'], ['rail', '上海虹桥', '绍兴北'],
+    ])
+    expect(route.transfers).toBe(1)
+  })
+
+  it('keeps an onward taxi after a train in the same segment and uses real geometry when supplied', () => {
+    const [railSegment, taxiSegment] = crossCity.route.transits[0].segments
+    const [route] = parseTransit({ route: { transits: [{ cost: { duration: '7020' }, segments: [{
+      ...railSegment, taxi: { ...taxiSegment.taxi, polyline: { polyline: '120.539485,30.098661;120.55,30.05;120.557350,29.983219' } },
+    }] }] } })
+    expect(route.details?.legs.map((leg) => leg.mode)).toEqual(['rail', 'drive'])
+    expect(route.details?.legs[1].path).toHaveLength(3)
+    expect(route.details?.legs[1].pathIsSchematic).toBeUndefined()
+  })
+
+  it('keeps empty provider values unknown and never invents station coordinates', () => {
+    const [route] = parseTransit({ route: { transits: [{ cost: { duration: '600', transit_fee: [] }, segments: [{
+      railway: { name: 'G1', departure_stop: { location: ' , ' }, arrival_stop: { location: '120.5,30.1' } },
+      taxi: { drivetime: [], distance: [], startpoint: '', endpoint: '' },
+    }] }] } })
+    expect(route.price).toBeNull()
+    expect(route.details?.legs.every((leg) => leg.path.length === 0)).toBe(true)
+    expect(route.details?.legs.find((leg) => leg.mode === 'drive')?.minutes).toBeUndefined()
+  })
+
   it('keeps missing fares and uncertainty unknown', () => {
     const routes = parseTransit({ route: { transits: [{ cost: { duration: '2400' }, segments: [{ walking: { cost: { duration: '600' } }, bus: { buslines: [{ name: '地铁2号线' }] } }] }] } })
     expect(routes[0]).toMatchObject({ minutes: 40, walkMinutes: 10, price: null, transfers: 0, delayMinutes: null, name: '地铁2号线' })

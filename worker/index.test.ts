@@ -1,7 +1,29 @@
 import { expect, it, vi } from 'vitest'
 import { handleRequest } from './index'
+import crossCity from '../src/fixtures/amap-cross-city.json'
+import { isRoute, type Route } from '../src/scoring'
 
 const env = { AMAP_WEB_KEY: 'test-secret', ALLOWED_ORIGINS: 'https://code92007.github.io' }
+
+it('returns complete railway and taxi itineraries through the route API', async () => {
+  const fetcher = vi.fn(async (input: string) => new Response(JSON.stringify(
+    input.includes('/transit/') ? crossCity : { status: '1', route: {} },
+  ))) as typeof fetch
+  const response = await handleRequest(new Request('https://worker.example/api/routes', {
+    method: 'POST', body: JSON.stringify({
+      origin: '上海南站', destination: '绍兴职业技术学院',
+      originSelection: { label: '上海南站', location: crossCity.route.origin, citycode: '021' },
+      destinationSelection: { label: '绍兴职业技术学院', location: crossCity.route.destination, citycode: '0575' },
+    }),
+  }), env, fetcher)
+  const result = await response.json() as { routes: Route[] }
+  expect(response.status).toBe(200)
+  expect(result.routes).toHaveLength(2)
+  expect(result.routes.every(isRoute)).toBe(true)
+  expect(result.routes[0].details?.legs.at(-1)).toMatchObject({ mode: 'drive', to: '绍兴职业技术学院' })
+  expect(result.routes[0].transfers).toBe(1)
+  expect(JSON.stringify(result)).not.toContain(env.AMAP_WEB_KEY)
+})
 
 it('allows the native iOS WebView origin when configured', async () => {
   const response = await handleRequest(new Request('https://worker.example/api/routes', {

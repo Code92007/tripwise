@@ -37,7 +37,10 @@ function RouteMap({ route }: { route: Route }) {
       for (const leg of details.legs) {
         const path = leg.path.map(convert)
         if (path.length < 2) continue
-        L.polyline(path, { color: legColors[leg.mode], weight: 5, opacity: 0.9 }).addTo(map)
+        const label = document.createElement('span')
+        label.textContent = leg.pathIsSchematic ? `${leg.instruction}（起终点示意）` : leg.instruction
+        L.polyline(path, { color: legColors[leg.mode], weight: 5, opacity: 0.9, dashArray: leg.pathIsSchematic ? '8 8' : undefined })
+          .bindTooltip(label).addTo(map)
         points.push(...path)
       }
       for (const [point, label, color] of [
@@ -66,10 +69,10 @@ function Leg({ leg, index }: { leg: RouteLeg; index: number }) {
   return <li className={`detail-leg detail-${leg.mode}`}>
     <span className="detail-leg-index">{String(index + 1).padStart(2, '0')}</span>
     <div className="detail-leg-body">
-      <span className="detail-leg-mode">{legNames[leg.mode]}</span>
+      <span className="detail-leg-mode">{leg.instruction === '打车接续' ? '打车' : legNames[leg.mode]}</span>
       <strong>{leg.instruction}</strong>
       {(leg.from || leg.to) && <p>{[leg.from, leg.to].filter(Boolean).join(' → ')}</p>}
-      <small>{[leg.minutes !== undefined ? `约 ${leg.minutes} 分钟` : '', formatDistance(leg.distanceMeters), leg.viaStops ? `途经 ${leg.viaStops} 站` : ''].filter(Boolean).join(' · ')}</small>
+      <small>{[leg.minutes !== undefined ? `约 ${leg.minutes} 分钟` : '', formatDistance(leg.distanceMeters), leg.viaStops ? `途经 ${leg.viaStops} 站` : '', leg.pathIsSchematic ? '地图虚线为起终点示意' : ''].filter(Boolean).join(' · ')}</small>
     </div>
   </li>
 }
@@ -103,7 +106,7 @@ export function RouteDetails({ route, onClose }: { route: Route; onClose: () => 
           {details.legs.length ? <ol className="detail-leg-list">{details.legs.map((leg, index) => <Leg leg={leg} index={index} key={index} />)}</ol> : <p className="detail-empty">高德未提供分段指引，请尝试更具体的起终点。</p>}
         </div>
       </>}
-      <p className="route-dialog-note"><MapPin size={14} />地图路线与指引仅用于行前参考，出行时请留意现场路况和站点信息。{route.estimatedFare && '费用不含动态加价、夜间附加费及可能的通行费。'}</p>
+      <p className="route-dialog-note"><MapPin size={14} />地图路线与指引仅用于行前参考，出行时请留意现场路况和站点信息。{details?.legs.some((leg) => leg.pathIsSchematic) && '虚线为起终点连线，不代表实际道路或铁路轨迹。'}{route.estimatedFare && '费用不含动态加价、夜间附加费及可能的通行费。'}</p>
     </section>
   </div>
 }

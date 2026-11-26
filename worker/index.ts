@@ -104,10 +104,12 @@ export async function handleRequest(request: Request, env: Env, fetcher: typeof 
     const params = { origin: origin.location, destination: destination.location }
     const routes = []
     const warnings: string[] = []
+    const placeNames = { origin: input.origin.trim(), destination: input.destination.trim() }
+    const parsePublicTransit = (payload: unknown) => parseTransit(payload, placeNames)
     for (const [label, path, options, parse] of [
-      ['公交', '/v5/direction/transit/integrated', { ...params, city1: origin.citycode, city2: destination.citycode, strategy: '0', AlternativeRoute: '5', show_fields: 'cost,polyline' }, parseTransit],
-      ['少换乘公交', '/v5/direction/transit/integrated', { ...params, city1: origin.citycode, city2: destination.citycode, strategy: '2', AlternativeRoute: '3', show_fields: 'cost,polyline' }, parseTransit],
-      ['少步行公交', '/v5/direction/transit/integrated', { ...params, city1: origin.citycode, city2: destination.citycode, strategy: '3', AlternativeRoute: '3', show_fields: 'cost,polyline' }, parseTransit],
+      ['公交', '/v5/direction/transit/integrated', { ...params, city1: origin.citycode, city2: destination.citycode, strategy: '0', AlternativeRoute: '5', show_fields: 'cost,polyline' }, parsePublicTransit],
+      ['少换乘公交', '/v5/direction/transit/integrated', { ...params, city1: origin.citycode, city2: destination.citycode, strategy: '2', AlternativeRoute: '3', show_fields: 'cost,polyline' }, parsePublicTransit],
+      ['少步行公交', '/v5/direction/transit/integrated', { ...params, city1: origin.citycode, city2: destination.citycode, strategy: '3', AlternativeRoute: '3', show_fields: 'cost,polyline' }, parsePublicTransit],
       ['驾车', '/v5/direction/driving', { ...params, alternative_route: '3', show_fields: 'cost,polyline' }, parseDriving],
       ['步行', '/v5/direction/walking', { ...params, show_fields: 'cost,polyline' }, parseWalking],
     ] as const) {
