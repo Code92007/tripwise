@@ -64,14 +64,14 @@ async function resolvePlace(label: string, selection: unknown, key: string, fetc
 export async function handleRequest(request: Request, env: Env, fetcher: typeof fetch = fetch): Promise<Response> {
   const url = new URL(request.url)
   if (url.pathname === '/health' && request.method === 'GET') return response(request, env, 200, { ok: true, configured: Boolean(env.AMAP_WEB_KEY) })
-  if (!['/api/routes', '/api/suggest', '/api/locate'].includes(url.pathname)) return response(request, env, 404, { error: '未找到接口' })
+  if (!['/api/routes', '/api/leg', '/api/suggest', '/api/locate'].includes(url.pathname)) return response(request, env, 404, { error: '未找到接口' })
   const headers = cors(request, env)
   if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers })
   if (request.method !== (url.pathname === '/api/suggest' ? 'GET' : 'POST')) return response(request, env, 405, { error: '请求方法不支持' })
   const origin = request.headers.get('Origin')
   if (origin && !headers.has('Access-Control-Allow-Origin')) return response(request, env, 403, { error: '来源未获允许' })
   if (!env.AMAP_WEB_KEY) return response(request, env, 503, { error: '地点服务尚未配置高德 Web 服务 Key' })
-  const limiter = url.pathname === '/api/routes' ? env.ROUTE_LIMIT : env.LOOKUP_LIMIT
+  const limiter = ['/api/routes', '/api/leg'].includes(url.pathname) ? env.ROUTE_LIMIT : env.LOOKUP_LIMIT
   if (limiter && !(await limiter.limit({ key: url.pathname })).success) return response(request, env, 429, { error: '查询过于频繁，请稍后重试' })
   if (url.pathname === '/api/suggest') {
     const query = url.searchParams.get('query')?.trim() || ''
@@ -85,6 +85,24 @@ export async function handleRequest(request: Request, env: Env, fetcher: typeof 
   }
   const input = await readInput(request)
   if (!input) return response(request, env, 400, { error: '请求格式不正确或过长' })
+  if (url.pathname === '/api/leg') {
+    if (!validLocation(input.origin) || !validLocation(input.destination) || !['drive', 'walk'].includes(String(input.mode))) {
+      return response(request, env, 400, { error: '本段起终点或出行方式无效' })
+    }
+    try {
+      const driving = input.mode === 'drive'
+      const payload = await amap(driving ? '/v5/direction/driving' : '/v5/direction/walking', {
+        origin: input.origin, destination: input.destination, show_fields: 'cost,polyline',
+      }, env.AMAP_WEB_KEY, fetcher)
+      const route = (driving ? parseDriving(payload) : parseWalking(payload))[0]
+      if (!route?.details?.legs.some((leg) => leg.path.length > 1)) {
+        return response(request, env, 422, { error: '高德暂未提供本段道路轨迹，仍可查看起终点示意' })
+      }
+      return response(request, env, 200, { route })
+    } catch {
+      return response(request, env, 502, { error: '本段道路路线暂不可用，请稍后重试' })
+    }
+  }
   if (url.pathname === '/api/locate') {
     if (!validLocation(input.location)) return response(request, env, 400, { error: '位置坐标无效' })
     try {

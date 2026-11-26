@@ -25,6 +25,7 @@ export type Route = {
   name: string
   mode: TravelMode
   minutes: number
+  distanceMeters?: number
   price: number | null
   walkMinutes: number | null
   transfers: number
@@ -140,6 +141,7 @@ export function isRoute(value: unknown): value is Route {
     typeof route.name === 'string' &&
     ['transit', 'rail', 'flight', 'drive', 'walk', 'mixed'].includes(String(route.mode)) &&
     ['minutes', 'transfers'].every((key) => validNonnegative(route[key])) &&
+    (route.distanceMeters === undefined || validNonnegative(route.distanceMeters)) &&
     ['price', 'walkMinutes', 'delayMinutes', 'stopGo'].every((key) => route[key] === null || validNonnegative(route[key])) &&
     (route.source === undefined || ['sample', 'manual', 'amap'].includes(String(route.source))) &&
     (route.details === undefined || isRouteDetails(route.details)) &&

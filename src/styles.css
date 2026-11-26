@@ -156,11 +156,30 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 3px s
 .route-dialog-summary span { display: inline-flex; align-items: center; gap: 6px; }
 .route-dialog-summary svg { color: #16866e; }
 .route-map { width: 100%; height: 310px; background: #e9efeb; z-index: 0; }
+.route-map-panel { scroll-margin-top: 8px; }
+.route-map-controls { display: flex; gap: 7px; padding: 10px 25px; overflow-x: auto; border-top: 1px solid #e2ebe6; }
+.route-map-controls button { flex: none; min-height: 36px; padding: 6px 13px; border: 1px solid #dbe6df; border-radius: 5px; background: #fff; color: #536b61; font: inherit; font-size: 12px; cursor: pointer; }
+.route-map-controls button[aria-pressed="true"] { border-color: #16866e; background: #eaf6f0; color: #106d57; font-weight: 700; }
+.route-map-controls button:focus-visible, .detail-leg-button:focus-visible { outline: 2px solid #16866e; outline-offset: 2px; }
+.route-segment-summary { padding: 2px 25px 13px; color: #536b61; font-size: 12px; line-height: 1.6; }
+.route-segment-summary strong { display: block; color: #263b31; font-size: 14px; }
+.route-segment-summary p { margin: 3px 0; overflow-wrap: anywhere; }
+.route-segment-status { margin: 0; padding: 9px 25px; color: #536b61; font-size: 12px; line-height: 1.6; }
+.route-segment-status button { margin-left: 10px; padding: 4px 10px; border: 1px solid #16866e; border-radius: 4px; color: #106d57; background: #fff; cursor: pointer; }
+.route-segment-directions { padding: 16px 25px; border-bottom: 1px solid #e2ebe6; }
+.route-segment-directions h3 { margin: 0 0 10px; font-size: 14px; }
+.route-segment-directions ol { margin: 0; padding-left: 24px; max-height: 240px; overflow-y: auto; }
+.route-segment-directions li { padding: 5px 0 5px 5px; color: #536b61; font-size: 12px; line-height: 1.6; }
+.route-segment-directions small { display: block; color: #6d867a; }
 .route-dialog-content { padding: 20px 25px 0; }
 .route-dialog-content h3 { margin: 0 0 13px; font-size: 14px; }
 .detail-leg-list { margin: 0; padding: 0; list-style: none; }
-.detail-leg { display: grid; grid-template-columns: 27px minmax(0, 1fr); gap: 12px; position: relative; padding: 0 0 19px; }
-.detail-leg:not(:last-child)::before { position: absolute; top: 26px; bottom: 0; left: 12px; width: 1px; background: #dbe6df; content: ''; }
+.detail-leg { position: relative; padding: 0 0 8px; }
+.detail-leg:not(:last-child)::before { position: absolute; top: 36px; bottom: 0; left: 23px; width: 1px; background: #dbe6df; content: ''; }
+.detail-leg-button { display: grid; grid-template-columns: 27px minmax(0, 1fr); gap: 12px; width: 100%; padding: 10px; border: 1px solid transparent; border-radius: 6px; text-align: left; background: transparent; font: inherit; cursor: pointer; }
+.detail-leg-button:hover { background: #f4f9f6; }
+.detail-leg-button[aria-pressed="true"] { border-color: #16866e; background: #eaf6f0; }
+.detail-leg-map-hint { display: block; margin-top: 6px; color: #13755d; font-size: 11px; font-weight: 700; }
 .detail-leg-index { z-index: 1; display: grid; place-items: center; width: 25px; height: 25px; border-radius: 50%; background: #e9f4ef; color: #13755d; font-size: 10px; font-weight: 800; }
 .detail-walk .detail-leg-index { background: #fff1e2; color: #af641f; }
 .detail-drive .detail-leg-index { background: #e8f1f8; color: #1878b6; }
@@ -168,7 +187,7 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 3px s
 .detail-leg-body { min-width: 0; padding-top: 1px; }
 .detail-leg-mode { display: block; margin-bottom: 2px; color: #6d867a; font-size: 10px; font-weight: 700; }
 .detail-leg-body strong { display: block; color: #263b31; font-size: 12px; line-height: 1.5; overflow-wrap: anywhere; }
-.detail-leg-body p { margin: 3px 0 0; color: #50675c; font-size: 11px; }
+.detail-leg-stations { display: block; margin: 3px 0 0; color: #50675c; font-size: 11px; overflow-wrap: anywhere; }
 .detail-leg-body small { display: block; margin-top: 4px; color: #879a8f; font-size: 10px; }
 .detail-empty { color: #809188; font-size: 12px; }
 .route-dialog-note { display: flex; align-items: flex-start; gap: 6px; margin: 0; padding: 3px 25px 21px; color: #86988d; font-size: 10px; line-height: 1.6; }
@@ -251,6 +270,9 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 3px s
   .route-dialog-head h2 { font-size: 17px; }
   .route-dialog-summary { padding: 0 17px 13px; gap: 8px 13px; font-size: 11px; }
   .route-map { height: 240px; }
+  .route-map-controls { padding: 10px 17px; }
+  .route-segment-summary, .route-segment-status { padding-left: 17px; padding-right: 17px; }
+  .route-segment-directions { padding: 14px 17px; }
   .route-dialog-content { padding: 18px 17px 0; }
   .route-dialog-note { padding: 3px 17px 18px; }
 }

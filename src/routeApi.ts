@@ -1,4 +1,4 @@
-import { isRoute, type Route } from './scoring'
+import { isRoute, type Coordinate, type Route } from './scoring'
 import type { PlaceSelection } from './places'
 
 export type RouteSearch = {
@@ -8,6 +8,27 @@ export type RouteSearch = {
   provider: string
   routes: Route[]
   warnings: string[]
+}
+
+export async function searchLegRoute(origin: Coordinate, destination: Coordinate, mode: 'drive' | 'walk', signal?: AbortSignal): Promise<Route> {
+  const base = import.meta.env.VITE_API_BASE_URL?.trim()
+  if (!base) throw new Error('路线服务尚未配置')
+  let response: Response
+  try {
+    response = await fetch(`${base.replace(/\/$/, '')}/api/leg`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, signal,
+      body: JSON.stringify({ origin: origin.join(','), destination: destination.join(','), mode }),
+    })
+  } catch (error) {
+    if (signal?.aborted) throw error
+    throw new Error('无法连接路线服务，请稍后重试')
+  }
+  const data = await response.json() as { route?: unknown; error?: string }
+  if (!response.ok) throw new Error(data.error || '本段路线暂不可用')
+  if (!isRoute(data.route) || data.route.mode !== mode || !data.route.details?.legs.some((leg) => leg.path.length > 1)) {
+    throw new Error('暂未获取到本段道路轨迹')
+  }
+  return data.route
 }
 
 export async function searchRoutes(origin: string, destination: string, originSelection?: PlaceSelection, destinationSelection?: PlaceSelection): Promise<RouteSearch> {

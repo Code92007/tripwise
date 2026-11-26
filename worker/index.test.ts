@@ -5,6 +5,59 @@ import { isRoute, type Route } from '../src/scoring'
 
 const env = { AMAP_WEB_KEY: 'test-secret', ALLOWED_ORIGINS: 'https://code92007.github.io' }
 
+it.each(['drive', 'walk'])('loads actual %s geometry and directions only for the requested segment', async (mode) => {
+  const fetcher = vi.fn(async (input: string) => {
+    const url = new URL(input)
+    expect(url.pathname).toBe(`/v5/direction/${mode === 'drive' ? 'driving' : 'walking'}`)
+    expect(url.searchParams.get('origin')).toBe('120.539485,30.098661')
+    expect(url.searchParams.get('destination')).toBe('120.55735,29.983219')
+    expect(url.searchParams.get('show_fields')).toBe('cost,polyline')
+    return new Response(JSON.stringify({ status: '1', route: {
+      origin: '120.539485,30.098661', destination: '120.55735,29.983219',
+      paths: [{ distance: '14500', cost: { duration: '1200' }, steps: [
+        { instruction: '沿车站南路向南行驶', step_distance: '500', distance: '500', polyline: { polyline: '120.539485,30.098661;120.54,30.09' } },
+        { instruction: '右转进入育才路', step_distance: '14000', distance: '14000', polyline: '120.54,30.09;120.55735,29.983219' },
+      ] }],
+    } }))
+  }) as typeof fetch
+  const response = await handleRequest(new Request('https://worker.example/api/leg', {
+    method: 'POST', body: JSON.stringify({ origin: '120.539485,30.098661', destination: '120.55735,29.983219', mode }),
+  }), env, fetcher)
+  const data = await response.json() as { route: Route }
+  expect(response.status).toBe(200)
+  expect(fetcher).toHaveBeenCalledTimes(1)
+  expect(isRoute(data.route)).toBe(true)
+  expect(data.route).toMatchObject({ mode, minutes: 20, distanceMeters: 14500 })
+  expect(data.route.details?.legs.map((leg) => leg.instruction)).toEqual(['沿车站南路向南行驶', '右转进入育才路'])
+  expect(data.route.details?.legs.every((leg) => leg.path.length === 2 && !leg.pathIsSchematic)).toBe(true)
+  expect(JSON.stringify(data)).not.toContain(env.AMAP_WEB_KEY)
+})
+
+it('rejects invalid segment requests and enforces the route quota before querying AMap', async () => {
+  const fetcher = vi.fn()
+  for (const input of [
+    { origin: '0,0', destination: '120.5,30.1', mode: 'drive' },
+    { origin: '120.5,30.1', destination: '120.6,30.2', mode: 'rail' },
+  ]) {
+    const response = await handleRequest(new Request('https://worker.example/api/leg', { method: 'POST', body: JSON.stringify(input) }), env, fetcher)
+    expect(response.status).toBe(400)
+  }
+  const limited = await handleRequest(new Request('https://worker.example/api/leg', {
+    method: 'POST', body: JSON.stringify({ origin: '120.5,30.1', destination: '120.6,30.2', mode: 'drive' }),
+  }), { ...env, ROUTE_LIMIT: { limit: async () => ({ success: false }) } }, fetcher)
+  expect(limited.status).toBe(429)
+  expect(fetcher).not.toHaveBeenCalled()
+})
+
+it('keeps unavailable segment geometry explicit instead of returning a fake road path', async () => {
+  const fetcher = vi.fn(async () => new Response(JSON.stringify({ status: '1', route: { paths: [{ cost: { duration: '1200' }, steps: [] }] } }))) as typeof fetch
+  const response = await handleRequest(new Request('https://worker.example/api/leg', {
+    method: 'POST', body: JSON.stringify({ origin: '120.5,30.1', destination: '120.6,30.2', mode: 'drive' }),
+  }), env, fetcher)
+  expect(response.status).toBe(422)
+  expect(await response.text()).toContain('暂未提供本段道路轨迹')
+})
+
 it('returns complete railway and taxi itineraries through the route API', async () => {
   const fetcher = vi.fn(async (input: string) => new Response(JSON.stringify(
     input.includes('/transit/') ? crossCity : { status: '1', route: {} },
